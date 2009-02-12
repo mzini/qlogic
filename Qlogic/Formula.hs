@@ -11,7 +11,7 @@ data Formula a = Var a
 
 -- custruction and intermediate simplification of formulae
 
-(|||),(&&&),(-->),(<->) :: (Formula a) -> (Formula a) -> (Formula a)
+(|||),(&&&),(-->),(<->) :: Formula a -> Formula a -> Formula a
 
 Top &&& b   = b
 Bot &&& _   = Bot
@@ -34,27 +34,33 @@ a   <-> b   = a `Iff` b
 
 
 Top --> b   = b
-Bot --> b   = Top
-a   --> Top = Top
+Bot --> _   = Top
+_   --> Top = Top
 a   --> Bot = neg a
 a   --> b   = a `Imp` b
 
+neg :: Formula a -> Formula a
 neg Bot     = Top
 neg Top     = Bot
 neg (Neg a) = a
 neg a       = Neg a
 
-
+top,bot :: Formula a
 bot = Bot
 
 top = Top
 
+var :: a -> Formula a 
+var = Var
+
 -- utility functions
 
-isVariable (Var x) = True
+isAtom, isVariable :: Formula a -> Bool
+
+isVariable (Var _) = True
 isVariable _       = True
 
-isAtom (Var x) = True
+isAtom (Var _) = True
 isAtom Top     = True
 isAtom Bot     = True
 isAtom _       = False
