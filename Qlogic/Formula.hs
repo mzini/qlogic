@@ -7,7 +7,7 @@ data Formula a = Var a
                | Imp (Formula a) (Formula a)
                | Neg (Formula a)
                | Top 
-               | Bot deriving Show
+               | Bot deriving (Eq, Ord, Show)
 
 -- custruction and intermediate simplification of formulae
 
@@ -50,6 +50,10 @@ bot = Bot
 
 top = Top
 
+
+bigAnd :: [Formula a] -> Formula a
+bigAnd = foldr (&&&) Top
+
 var :: a -> Formula a 
 var = Var
 
@@ -64,4 +68,8 @@ isAtom (Var _) = True
 isAtom Top     = True
 isAtom Bot     = True
 isAtom _       = False
+
+isLiteral (Neg (Var _)) = True
+isLiteral (Var _)       = True
+isLiteral _             = False
 
