@@ -1,4 +1,5 @@
 PREFIX=/usr/local
+
 FOLKUNG=Folkung
 FOLKUNGTGZ=folkung3.tar.gz
 MINISAT=$(FOLKUNG)/minisat/current-base
@@ -10,7 +11,6 @@ all: build doc_haskell
 build: build_minisat build_haskell
 
 install: install_minisat install_haskell
-	$(SETUP) install
 
 uninstall: uninstall_minisat unregister_haskell
 
@@ -25,7 +25,7 @@ prepare:
 ###  minisat stuff
 ######################################################################
 
-install_minisat: minisat
+install_minisat: build_minisat
 	install -m 644 -o root $(MINISAT)/libminisat.a $(PREFIX)/lib
 	install -m 644 -o root $(MINISAT_INST)/libinstantiate.a $(PREFIX)/lib
 	ldconfig
