@@ -104,28 +104,29 @@ transformPlus Top              = maybeComputePos Top $ return [] -- MA: verify
 transformPlus Bot              = maybeComputePos Bot $ return [] -- MA: verify - AS: return TRUE fuer literale, die
                                                                  -- "falsitaet" von Bottom wir weiter oben behandelt
 
-transformMinus fm@(a `And` b) = 
+transformMinus fm@(a `And` b) =
   maybeComputeNeg fm $
   do cnfA <- transformMinus a
      cnfB <- transformMinus b
      return $ [[nlit a, nlit b, lit fm]] +&+ cnfA +&+ cnfB
             -- bigAnd [(lvar a `And` lvar b) `Imp` (lvar fm), cnfA, cnfB] -- MA: korrigiert
-transformMinus fm@(a `Or` b) = 
+transformMinus fm@(a `Or` b) =
   maybeComputeNeg fm $ 
   do cnfA <- transformMinus a
      cnfB <- transformMinus b
      return $ [[nlit a, lit fm], [nlit b, lit fm]] +&+ cnfA +&+ cnfB
      -- [(lvar a `Or` lvar b) `Imp` (lvar fm)  , cnfA, cnfB] -- MA: korrigiert
      -- -a & -b | fm === (-a | fm) & (-b | fm)
-transformMinus fm@(a `Iff` b) = 
+transformMinus fm@(a `Iff` b) =
   maybeComputeNeg fm $
   do cnfApos <- transformPlus a
      cnfAneg <- transformMinus a
      cnfBpos <- transformPlus b
      cnfBneg <- transformMinus b
-     return $ [[lit fm, lit a, nlit b], [lit fm, nlit a, lit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg -- MA:TODO: verify
+     return $ [[lit fm, lit a, lit b], [lit fm, nlit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
+        -- MA: verify - AS: kleine Korrektur
 
-transformMinus fm@(a `Imp` b) = 
+transformMinus fm@(a `Imp` b) =
   maybeComputeNeg fm $
   do cnfA <- transformMinus a
      cnfB <- transformPlus b
