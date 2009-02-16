@@ -1,5 +1,4 @@
-PREFIX=/usr/local
-
+include ./template.mk
 FOLKUNG=Folkung
 FOLKUNGTGZ=folkung3.tar.gz
 MINISAT=$(FOLKUNG)/minisat/current-base
@@ -26,9 +25,8 @@ prepare:
 ######################################################################
 
 install_minisat: build_minisat
-	install -m 644 -o root $(MINISAT)/libminisat.a $(PREFIX)/lib
-	install -m 644 -o root $(MINISAT_INST)/libinstantiate.a $(PREFIX)/lib
-	ldconfig
+	install -m 644 $(MINISAT)/libminisat.a $(PREFIX)/lib
+	install -m 644 $(MINISAT_INST)/libinstantiate.a $(PREFIX)/lib
 
 uninstall_minisat:
 	rm $(PREFIX)/lib/libminisat.a
@@ -41,5 +39,3 @@ build_minisat:
 clean_minisat:
 	make clean -C $(MINISAT) 
 	make clean -C $(MINISAT_INST) 
-
-include ./template.mk
