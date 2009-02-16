@@ -49,7 +49,7 @@ extractAssign = do literals <- State.get
                    map <- Map.foldWithKey f (return Assign.empty) literals
                    return $ Tseitin.baseAssignment map
     where f k l m = do assign <- m
-                       v <- lift $ Sat.getValue l
+                       v <- lift $ Sat.getModelValue l
                        return $ Assign.bind [k |-> v] assign
 
 run :: MiniSat r a -> IO r
@@ -60,7 +60,7 @@ solve fm = run (solve_ fm)
 
 solve_ :: (Show a, Ord a) => Formula a -> MiniSat (Answer a) a
 solve_ fm = do addClauses fm
-               isSat <- lift Sat.okay
+               isSat <- lift $ Sat.solve []
                case isSat of 
                  True -> Satisfiable `liftM` extractAssign
                  False -> return Unsatisfiable
