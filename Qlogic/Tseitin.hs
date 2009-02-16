@@ -2,7 +2,7 @@ module Qlogic.Tseitin where
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import Qlogic.Assign (Assign, toMap, fromMap, empty) 
+import Qlogic.Assign (Assign, toMap, fromMap, empty)
 import Qlogic.Formula
 
 data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
@@ -11,7 +11,6 @@ data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
 
 data Literal a = PosLit a -- ^ positive literal
                | NegLit a -- ^ negative literal
-               | TopLit  -- ^ special literal to represent truth
                  deriving (Show, Eq)
 
 type Clause a = [Literal a]
@@ -28,10 +27,9 @@ lit fm      = PosLit $ L fm
 nlit fm = negate $ lit fm
   where negate (PosLit x) = NegLit x
         negate (NegLit x) = PosLit x
-        negate _ = error "Cannot happen"
 
 
--- | The state monad for constructing CNFs exploits sharing by keeping 
+-- | The state monad for constructing CNFs exploits sharing by keeping
 -- a record of so far translated subformulas
 type PGSetMonad a r = State.State (St a) r
 
