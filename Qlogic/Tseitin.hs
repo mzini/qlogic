@@ -33,9 +33,11 @@ lit Top = TopLit
 lit Bot = BotLit
 lit (Neg x) = nlit x
 lit fm      = PosLit $ L fm
-nlit fm = negate $ lit fm
-  where negate (PosLit x) = NegLit x
-        negate (NegLit x) = PosLit x
+
+nlit fm = negate' $ lit fm
+  where negate' (PosLit x) = NegLit x
+        negate' (NegLit x) = PosLit x
+        negate' _ = error "Cannot happen"
 
 -- | The state monad for constructing CNFs exploits sharing by keeping
 -- a record of so far translated subformulas
@@ -56,7 +58,13 @@ setNSet :: Set.Set (Formula a) -> PGSetMonad a ()
 setPSet set = State.modify $ \s -> s {posSet = set}
 setNSet set = State.modify $ \s -> s {negSet = set}
 
-maybeCompute_ getSet setSet fm m =
+maybeCompute_  :: Ord a => (PGSetMonad a (Set.Set (Formula a))) 
+               -> (Set.Set (Formula a) -> PGSetMonad a ()) 
+               -> Formula a 
+               -> PGSetMonad a (CNF (ExtendedAtom a)) 
+               -> PGSetMonad a (CNF (ExtendedAtom a))
+
+maybeCompute_ getSet setSet fm m = 
   do s <- getSet
      case fm `Set.member` s of
        False -> setSet (Set.insert fm s) >> m
@@ -151,6 +159,7 @@ transform fm = State.evalState (transformList $ splitAnd fm) $ St {posSet = Set.
         splitAnd fm'          = [fm']
 
 -- size decreasing simplification
+simplify :: Formula a -> Formula a
 simplify ((Neg a) `Or` b) = a `Imp` b
 simplify (a `Or` (Neg b)) = b `Imp` a
 simplify (Neg  (Neg a))   = a
