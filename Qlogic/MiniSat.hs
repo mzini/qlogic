@@ -34,12 +34,14 @@ addClauses f = do mapM_ addClause' cnf
                   lift $ Sat.lift $ putStrLn $ show cnf
                   return ()
   where cnf = Tseitin.transform f
-        addClause' clause = do mlits <- mapM mkLit clause
-                               lift $ Sat.addClause mlits
-                               return ()
+        addClause' clause | Tseitin.TopLit `elem` clause = return ()
+                          | otherwise                    = do mlits <- (mapM mkLit . filter Tseitin.isVarLit) clause
+                                                              lift $ Sat.addClause mlits
+                                                              return ()
         mkLit (Tseitin.PosLit l) = literal l
         mkLit (Tseitin.NegLit l) = do l <- literal l
                                       return $ Sat.neg l
+        mkLit _                  = error "Somebody set up us the bomb!"
 
 
 extractAssign :: Ord a => MiniSat (Assign.Assign a) a

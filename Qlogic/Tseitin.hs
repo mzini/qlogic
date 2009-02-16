@@ -11,6 +11,8 @@ data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
 
 data Literal a = PosLit a -- ^ positive literal
                | NegLit a -- ^ negative literal
+               | TopLit
+               | BotLit
                  deriving (Show, Eq)
 
 type Clause a = [Literal a]
@@ -20,14 +22,20 @@ type CNF a = [Clause a]
 (+&+) :: CNF a -> CNF a -> CNF a
 cnf1 +&+ cnf2 = cnf1 ++ cnf2
 
+isVarLit :: Literal a -> Bool
+isVarLit (PosLit _) = True
+isVarLit (NegLit _) = True
+isVarLit _ = False
+
 lit,nlit :: Formula a -> Literal (ExtendedAtom a)
-lit (Var x) = PosLit $ V x 
-lit (Neg (Var x)) = NegLit $ V x 
+lit (Var x) = PosLit $ V x
+lit Top = TopLit
+lit Bot = BotLit
+lit (Neg x) = nlit x
 lit fm      = PosLit $ L fm
 nlit fm = negate $ lit fm
   where negate (PosLit x) = NegLit x
         negate (NegLit x) = PosLit x
-
 
 -- | The state monad for constructing CNFs exploits sharing by keeping
 -- a record of so far translated subformulas
@@ -48,66 +56,66 @@ setNSet :: Set.Set (Formula a) -> PGSetMonad a ()
 setPSet set = State.modify $ \s -> s {posSet = set}
 setNSet set = State.modify $ \s -> s {negSet = set}
 
-
-maybeCompute_ getSet setSet fm m = 
+maybeCompute_ getSet setSet fm m =
   do s <- getSet
-     case fm `Set.member` s of 
+     case fm `Set.member` s of
        False -> setSet (Set.insert fm s) >> m
        True  -> return []
 
 -- positive transformation
 maybeComputePos, maybeComputeNeg :: Ord a => Formula a -> PGSetMonad a (CNF (ExtendedAtom a)) -> PGSetMonad a (CNF (ExtendedAtom a))
-maybeComputePos = maybeCompute_  getPSet setPSet
-maybeComputeNeg = maybeCompute_  getNSet setNSet
+maybeComputePos = maybeCompute_ getPSet setPSet
+maybeComputeNeg = maybeCompute_ getNSet setNSet
 
 transformPlus,transformMinus :: (Ord a) => (Formula a) -> PGSetMonad a (CNF (ExtendedAtom a))
-transformPlus fm@(a `And` b) = 
+transformPlus fm@(a `And` b) =
   maybeComputePos fm $
   do cnfA <- transformPlus a
      cnfB <- transformPlus b
      return $ [[nlit fm, lit a], [nlit fm, lit b]] +&+ cnfA +&+ cnfB
      -- bigAnd [(lvar fm) `Imp` (lvar a `And` lvar b), phiA, phiB]
-transformPlus fm@(a `Or` b) = 
-  maybeComputePos fm $ 
+transformPlus fm@(a `Or` b) =
+  maybeComputePos fm $
   do cnfA <- transformPlus a
      cnfB <- transformPlus b
      return $ [[nlit fm, lit a, lit b]] +&+ cnfA +&+ cnfB
      -- bigAnd [(lvar fm) `Imp` (lvar a `Or` lvar b), phiA, phiB]
-transformPlus fm@(a `Iff` b) = 
+transformPlus fm@(a `Iff` b) =
   maybeComputePos fm $
   do cnfApos <- transformPlus a
      cnfAneg <- transformMinus a
      cnfBpos <- transformPlus b
      cnfBneg <- transformMinus b
-     return $ [[nlit fm, lit a, nlit b], [nlit fm, lit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
+     return $ [[nlit fm, nlit a, lit b], [nlit fm, lit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
      --  bigAnd [lvar fm `Imp` (lvar a `Iff` lvar b), cnfApos, cnfAneg, cnfBpos, cnfBneg]
      -- fm -> (a <-> b)
      -- -fm | ((-a | b) & (a | -b))
      -- (-fm | -a | b) & (-fm | a | -b)
-     -- 
-transformPlus fm@(a `Imp` b) = 
+     --
+transformPlus fm@(a `Imp` b) =
   maybeComputePos fm $
   do cnfA <- transformMinus a
      cnfB <- transformPlus b
-     return $ [[nlit fm, nlit a, lit b]] +&+ cnfA +&+ cnfB -- MA:TODO verivy
+     return $ [[nlit fm, nlit a, lit b]] +&+ cnfA +&+ cnfB -- MA: verify - AS: sieht gut aus
      -- bigAnd [lvar fm `Imp` (lvar a `Imp` lvar b), cnfA, cnfB]
-transformPlus fm@(Neg a)    = maybeComputePos fm $ transformMinus a
-transformPlus fm@(Var _)    = maybeComputePos fm $ return $ [] -- TODO:MA: verify LITERALE EIGENS BEHANDELN!
-transformPlus Top           = maybeComputePos Top $ return [] -- TODO:MA: verify
-transformPlus Bot           = maybeComputePos Bot $ return [[]] -- TODO:MA: verify
+transformPlus fm@(Neg a)       = maybeComputePos fm $ transformMinus a
+transformPlus fm@(Var _)       = maybeComputePos fm $ return [] -- MA: verify LITERALE EIGENS BEHANDELN!
+transformPlus Top              = maybeComputePos Top $ return [] -- MA: verify
+transformPlus Bot              = maybeComputePos Bot $ return [] -- MA: verify - AS: return TRUE fuer literale, die
+                                                                 -- "falsitaet" von Bottom wir weiter oben behandelt
 
 transformMinus fm@(a `And` b) = 
   maybeComputeNeg fm $
   do cnfA <- transformMinus a
      cnfB <- transformMinus b
      return $ [[nlit a, nlit b, lit fm]] +&+ cnfA +&+ cnfB
-            -- bigAnd [(lvar a `And` lvar b) `Imp` (lvar fm), cnfA, cnfB] -- MA:TODO: korrigiert
+            -- bigAnd [(lvar a `And` lvar b) `Imp` (lvar fm), cnfA, cnfB] -- MA: korrigiert
 transformMinus fm@(a `Or` b) = 
   maybeComputeNeg fm $ 
   do cnfA <- transformMinus a
      cnfB <- transformMinus b
-     return $ [[nlit a, nlit b, lit a]] +&+ cnfA +&+ cnfB
-     -- [(lvar a `Or` lvar b) `Imp` (lvar fm)  , cnfA, cnfB] -- MA:TODO korrigiert
+     return $ [[nlit a, lit fm], [nlit b, lit fm]] +&+ cnfA +&+ cnfB
+     -- [(lvar a `Or` lvar b) `Imp` (lvar fm)  , cnfA, cnfB] -- MA: korrigiert
      -- -a & -b | fm === (-a | fm) & (-b | fm)
 transformMinus fm@(a `Iff` b) = 
   maybeComputeNeg fm $
