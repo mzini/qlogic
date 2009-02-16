@@ -147,7 +147,6 @@ transform fm = State.evalState (transformList $ splitAnd fm) $ St {posSet = Set.
 simplify ((Neg a) `Or` b) = a `Imp` b
 simplify (a `Or` (Neg b)) = b `Imp` a
 simplify (Neg  (Neg a))   = a
-simplify (Neg  (Neg a))   = a
 simplify (Neg  ((Neg a) `And` (Neg b)))   = a `Or` b
 simplify (Neg  ((Neg a) `Or` (Neg b)))   = a `And` b
 simplify _ = undefined  -- TODO finish

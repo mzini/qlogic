@@ -1,4 +1,5 @@
-include ./template.mk
+PREFIX=/usr/local
+
 FOLKUNG=Folkung
 FOLKUNGTGZ=folkung3.tar.gz
 MINISAT=$(FOLKUNG)/minisat/current-base
@@ -15,7 +16,7 @@ uninstall: uninstall_minisat unregister_haskell
 
 clean: clean_minisat clean_haskell
 
-prepare: 
+prepare:
 	tar xvzf $(FOLKUNGTGZ)
 
 .PHONY: clean
@@ -25,17 +26,20 @@ prepare:
 ######################################################################
 
 install_minisat: build_minisat
-	install -m 644 $(MINISAT)/libminisat.a $(PREFIX)/lib
-	install -m 644 $(MINISAT_INST)/libinstantiate.a $(PREFIX)/lib
+	install -m 644 -o root $(MINISAT)/libminisat.a $(PREFIX)/lib
+	install -m 644 -o root $(MINISAT_INST)/libinstantiate.a $(PREFIX)/lib
+	ldconfig
 
 uninstall_minisat:
 	rm $(PREFIX)/lib/libminisat.a
 	rm $(PREFIX)/lib/libinstantiate.a
 
 build_minisat: 
-	make libminisat.a -C $(MINISAT) 
-	make libinstantiate.a -C $(MINISAT_INST) 
+	make libminisat.a -C $(MINISAT)
+	make libinstantiate.a -C $(MINISAT_INST)
 
 clean_minisat:
 	make clean -C $(MINISAT) 
 	make clean -C $(MINISAT_INST) 
+
+include ./template.mk
