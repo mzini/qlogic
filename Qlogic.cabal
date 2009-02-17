@@ -10,7 +10,8 @@ cabal-version:      >= 1.6
 build-type:	    Simple
 
 library
- exposed-modules:   Qlogic.Formula
+ exposed-modules:   Qlogic.Diophantine
+                    Qlogic.Formula
                     Qlogic.Assign
                     Qlogic.MiniSat
                     Qlogic.NatSat
