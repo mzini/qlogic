@@ -1,9 +1,19 @@
-module Qlogic.Tseitin where
+module Qlogic.Tseitin 
+  (ExtendedAtom,
+   CNF,
+   Clause,
+   Literal(..),
+   isVarLit,
+   transform,
+   baseAssignment
+  )
+where
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Qlogic.Assign (Assign, toMap, fromMap, empty)
 import Qlogic.Formula
+
 
 data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
                     | V a -- ^ an atom of the input formula
@@ -11,7 +21,7 @@ data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
 
 data Literal a = PosLit a -- ^ positive literal
                | NegLit a -- ^ negative literal
-               | TopLit
+               | TopLit 
                | BotLit
                  deriving (Show, Eq)
 
@@ -34,11 +44,11 @@ lit Bot = BotLit
 lit (Neg x) = nlit x
 lit fm      = PosLit $ L fm
 
-nlit fm = negate $ lit fm
-  where negate (PosLit x) = NegLit x
-        negate (NegLit x) = PosLit x
-        negate TopLit = BotLit
-        negate BotLit = TopLit
+nlit fm = negate' $ lit fm
+  where negate' (PosLit x) = NegLit x
+        negate' (NegLit x) = PosLit x
+        negate' TopLit = BotLit
+        negate' BotLit = TopLit
 
 -- | The state monad for constructing CNFs exploits sharing by keeping
 -- a record of so far translated subformulas
@@ -71,7 +81,6 @@ maybeCompute_ getSet setSet fm m =
        False -> setSet (Set.insert fm s) >> m
        True  -> return []
 
--- positive transformation
 maybeComputePos, maybeComputeNeg :: Ord a => Formula a -> PGSetMonad a (CNF (ExtendedAtom a)) -> PGSetMonad a (CNF (ExtendedAtom a))
 maybeComputePos = maybeCompute_ getPSet setPSet
 maybeComputeNeg = maybeCompute_ getNSet setNSet
