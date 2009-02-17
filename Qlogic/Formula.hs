@@ -14,6 +14,8 @@ module Qlogic.Formula
   , bot 
   , bigAnd
   , bigOr
+  , oneOrThree
+  , twoOrThree
    -- ** Predicates
   , isVariable
   , isLiteral
@@ -83,6 +85,12 @@ bigAnd = foldr (&&&) Top
 bigOr :: [Formula a] -> Formula a
 -- ^ disjunction of multiple formulas
 bigOr = foldr (|||) Bot
+
+oneOrThree :: Formula a -> Formula a -> Formula a -> Formula a
+oneOrThree p q r = p <-> q <-> r
+
+twoOrThree :: Formula a -> Formula a -> Formula a -> Formula a
+twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
 
 var :: a -> Formula a 
 -- ^ lift a variable to a formula

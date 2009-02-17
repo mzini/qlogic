@@ -11,7 +11,7 @@ all: build doc_haskell
 
 build: build_minisat build_haskell
 
-install: install_minisat install_haskell doc_haskell
+install: install_minisat install_haskell
 
 uninstall: uninstall_minisat unregister_haskell
 

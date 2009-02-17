@@ -13,6 +13,7 @@ library
  exposed-modules:   Qlogic.Formula
                     Qlogic.Assign
                     Qlogic.MiniSat
+                    Qlogic.NatSat
                     Qlogic.Tseitin
 -- Folkung Sat Interface
  other-modules:     Sat
