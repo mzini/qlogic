@@ -1,12 +1,16 @@
 module Qlogic.MiniSat where
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Map as Map
-import qualified Qlogic.Assign as Assign
-import Qlogic.Assign ((|->))
-import Control.Monad (liftM, mapM_)
+import Prelude hiding (mapM_)
+import Control.Monad (liftM,mapM)
+import Data.Foldable (mapM_)
 import Control.Monad.Trans (lift)
 import qualified Sat as Sat
+
 import Qlogic.Formula
+import Qlogic.Cnf (Literal(..), isVarLit)
+import qualified Qlogic.Assign as Assign
+import Qlogic.Assign ((|->))
 import qualified Qlogic.Tseitin as Tseitin
 
 data Answer a = Satisfiable (Assign.Assign a)
@@ -29,19 +33,17 @@ literal a = do literals <- State.get
                      return $ Map.lookup a literals
 
 
-addClauses :: (Ord a,Show a) => Formula a -> MiniSat () a
-addClauses f = do mapM_ addClause' cnf
-                  lift $ Sat.lift $ putStrLn $ show cnf
-                  return ()
+addClauses :: (Ord a) => Formula a -> MiniSat () a
+addClauses f = mapM_ addClause' cnf
   where cnf = Tseitin.transform f
-        addClause' clause | Tseitin.TopLit `elem` clause = return ()
-                          | otherwise                    = do mlits <- (mapM mkLit . filter Tseitin.isVarLit) clause
-                                                              lift $ Sat.addClause mlits
-                                                              return ()
-        mkLit (Tseitin.PosLit l) = literal l
-        mkLit (Tseitin.NegLit l) = do l <- literal l
-                                      return $ Sat.neg l
-        mkLit _                  = error "Somebody set up us the bomb!"
+        addClause' clause | TopLit `elem` clause = return ()
+                          | otherwise            = do mlits <- (mapM mkLit . filter isVarLit) clause
+                                                      lift $ Sat.addClause mlits
+                                                      return ()
+        mkLit (PosLit l) = literal l
+        mkLit (NegLit l) = do l <- literal l
+                              return $ Sat.neg l
+        mkLit _          = error "Somebody set up us the bomb!"
 
 
 extractAssign :: Ord a => MiniSat (Assign.Assign a) a
@@ -55,10 +57,10 @@ extractAssign = do literals <- State.get
 run :: MiniSat r a -> IO r
 run m = Sat.run $ State.evalStateT m Map.empty
 
-solve :: (Ord a, Show a)  => Formula a -> IO (Answer a)
+solve :: (Ord a)  => Formula a -> IO (Answer a)
 solve fm = run (solve_ fm)
 
-solve_ :: (Show a, Ord a) => Formula a -> MiniSat (Answer a) a
+solve_ :: (Ord a) => Formula a -> MiniSat (Answer a) a
 solve_ fm = do addClauses fm
                isSat <- lift $ Sat.solve []
                case isSat of 

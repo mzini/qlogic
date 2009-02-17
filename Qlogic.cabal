@@ -15,6 +15,7 @@ library
                     Qlogic.MiniSat
                     Qlogic.NatSat
                     Qlogic.Tseitin
+                    Qlogic.Cnf
 -- Folkung Sat Interface
  other-modules:     Sat
                     Name

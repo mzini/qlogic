@@ -1,10 +1,9 @@
 module Qlogic.Formula 
-  (
-   -- * Types
-   Formula(..)
-   -- * Operations 
-   -- ** Boolean Connectives and constructors
-  , (|||) 
+  (-- * Types
+   Formula(..) 
+  -- * Operations 
+  -- ** Boolean Connectives for formulas
+  , (|||)
   , (&&&) 
   , (-->) 
   , (<->) 
@@ -22,6 +21,7 @@ module Qlogic.Formula
   , isAtom
   ) 
 where
+
 data Formula a = Var a 
                | And (Formula a) (Formula a)
                | Or (Formula a) (Formula a)
