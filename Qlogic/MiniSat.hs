@@ -8,7 +8,8 @@ import Control.Monad.Trans (lift)
 import qualified Sat as Sat
 
 import Qlogic.Formula
-import Qlogic.Cnf (Literal(..), isVarLit)
+import Qlogic.Cnf (Literal(..))
+import qualified Qlogic.Cnf as Cnf
 import qualified Qlogic.Assign as Assign
 import Qlogic.Assign ((|->))
 import qualified Qlogic.Tseitin as Tseitin
@@ -34,17 +35,15 @@ literal a = do literals <- State.get
 
 
 addClauses :: (Ord a) => Formula a -> MiniSat () a
-addClauses f = mapM_ addClause' cnf
-  where cnf = Tseitin.transform f
-        addClause' clause | TopLit `elem` clause = return ()
-                          | otherwise            = do mlits <- (mapM mkLit . filter isVarLit) clause
-                                                      lift $ Sat.addClause mlits
-                                                      return ()
+addClauses fm | Cnf.isContradiction cnf = lift $ Sat.contradiction
+              | otherwise               = Cnf.foldr f (return ()) cnf
+  where cnf = Tseitin.transform fm
+        f clause m = do mlits <- mapM mkLit $ Cnf.clauseToList clause
+                        lift $ Sat.addClause mlits
+                        m
         mkLit (PosLit l) = literal l
         mkLit (NegLit l) = do l <- literal l
                               return $ Sat.neg l
-        mkLit _          = error "Somebody set up us the bomb!"
-
 
 extractAssign :: Ord a => MiniSat (Assign.Assign a) a
 extractAssign = do literals <- State.get

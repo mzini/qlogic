@@ -1,50 +1,77 @@
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 module Qlogic.Cnf
-  ( -- * Types 
-   Literal(..)
+  (-- * Literals
+   Literal(..) 
+   -- * Clauses 
   , Clause
-  , CNF
-  -- * Operations
-  , isVarLit
   , emptyClause
-  , empty
-  , (+&+)
+  , clause 
+  , clauseToList
+  -- * Conjunctive Normal Form
+  , CNF
+  , top
+  , bot
+  , singleton
   , fromList
+  , (+&+)
+  , foldr
+  , isContradiction
   ) 
 where
-import qualified Data.Sequence as Seq
-import Data.Sequence ((><))
-import Data.Foldable
+import Prelude hiding (foldr)
+import qualified Data.List as List
 
 data Literal a = PosLit a -- ^ positive literal
                | NegLit a -- ^ negative literal
-               | TopLit 
-               | BotLit
                  deriving (Show, Eq)
 
-type Clause a = [Literal a]
-
-type CNF a = Seq.Seq (Clause a)
-
-empty :: CNF a
--- ^ the empty 'CNF'
-empty = Seq.empty
+newtype Clause a = Clause {clauseToList :: [Literal a]}
 
 emptyClause :: Clause a
 -- ^ the empty 'Clause'
-emptyClause = []
+emptyClause = clause []
+
+clause :: [Literal a] -> Clause a
+clause = Clause 
+
+data CNF a = Empty
+           | Singleton (Clause a)
+           | (CNF a) :&: (CNF a)
+
+isContradiction :: CNF a -> Bool
+isContradiction (Singleton (Clause [])) = True
+isContradiction _                       = False
+
+top :: CNF a
+-- ^ the empty set of clausse
+top = Empty
+
+bot :: CNF a
+-- ^ the singleton set containing the empty clause
+bot = Singleton (emptyClause)
+
+singleton :: Clause a -> CNF a
+-- ^ the singleton set containing the empty clause
+singleton = Singleton
+
+
+
+fromList :: [Clause a] -> CNF a
+-- ^ translate a 'List' of 'Clause's to a 'CNF'
+fromList []     = Empty
+fromList [a]    = Singleton a
+fromList (a:as) = List.foldr (:&:) (Singleton a) $ map Singleton as
 
 (+&+) :: CNF a -> CNF a -> CNF a
 -- ^ concatenation of two 'CNF's
-(+&+) = (><)
+Empty +&+ b     = b
+a     +&+ Empty = a
+a     +&+ b     = a :&: b
 
-isVarLit :: Literal a -> Bool
--- ^ Returns 'True' if the given literal is either 
---   a positive or negative variable
-isVarLit (PosLit _) = True
-isVarLit (NegLit _) = True
-isVarLit _ = False
+foldr :: (Clause a -> b -> b) -> b -> CNF a -> b 
+foldr _ b Empty           = b
+foldr f b (Singleton a)   = f a b
+foldr f b (cnf1 :&: cnf2) = foldr f (foldr f b cnf2) cnf1
 
-fromList :: [Clause a] -> CNF a
-fromList = Seq.fromList
 

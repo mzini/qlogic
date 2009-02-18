@@ -10,24 +10,38 @@ import qualified Data.Map as Map
 import Qlogic.Assign (Assign, toMap, fromMap, empty)
 import Qlogic.Formula
 import qualified Qlogic.Cnf as Cnf
-import Qlogic.Cnf (CNF, (+&+), Literal(..), emptyClause)
+import Qlogic.Cnf (CNF, (+&+), Literal(..))
 
 data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
                     | V a -- ^ an atom of the input formula
                       deriving (Eq, Ord, Show)
 
-lit,nlit :: Formula a -> Literal (ExtendedAtom a)
-lit (Var x) = PosLit $ V x
-lit Top = TopLit
-lit Bot = BotLit
-lit (Neg x) = nlit x
-lit fm      = PosLit $ L fm
+data ExtendedLiteral a = Lit (Literal a)
+                       | TopLit
+                       | BotLit
+                         deriving (Eq)
 
+lit :: Formula a -> ExtendedLiteral (ExtendedAtom a)
+lit (Var x) = Lit $ PosLit $ V x
+lit Top     = TopLit
+lit Bot     = BotLit
+lit (Neg x) = nlit x
+lit fm      = Lit $ PosLit $ L fm
+
+nlit :: Formula a -> ExtendedLiteral (ExtendedAtom a)
 nlit fm = negate' $ lit fm
-  where negate' (PosLit x) = NegLit x
-        negate' (NegLit x) = PosLit x
-        negate' TopLit = BotLit
-        negate' BotLit = TopLit
+  where negate' (Lit (PosLit x)) = Lit (NegLit x)
+        negate' (Lit (NegLit x)) = Lit (PosLit x)
+        negate' TopLit           = BotLit
+        negate' BotLit           = TopLit
+
+
+toCnf :: Eq a => [[ExtendedLiteral a]] -> CNF a
+toCnf = foldr appendClause Cnf.top
+  where appendClause cl cnf | TopLit `elem` cl = cnf
+                            | otherwise        = Cnf.singleton (Cnf.clause $ foldr lower [] cl) +&+ cnf
+        lower BotLit l = l
+        lower (Lit a) l = a:l
 
 -- | The state monad for constructing CNFs exploits sharing by keeping
 -- a record of so far translated subformulas
@@ -58,7 +72,7 @@ maybeCompute_ getSet setSet fm m =
   do s <- getSet
      case fm `Set.member` s of
        False -> setSet (Set.insert fm s) >> m
-       True  -> return $ Cnf.empty
+       True  -> return $ Cnf.top
 
 maybeComputePos, maybeComputeNeg :: Ord a => Formula a -> PGSetMonad a (CNF (ExtendedAtom a)) -> PGSetMonad a (CNF (ExtendedAtom a))
 maybeComputePos = maybeCompute_ getPSet setPSet
@@ -69,13 +83,13 @@ transformPlus fm@(a `And` b) =
   maybeComputePos fm $
   do cnfA <- transformPlus a
      cnfB <- transformPlus b
-     return $ Cnf.fromList [[nlit fm, lit a], [nlit fm, lit b]] +&+ cnfA +&+ cnfB
+     return $ toCnf [[nlit fm, lit a], [nlit fm, lit b]] +&+ cnfA +&+ cnfB
      -- bigAnd [(lvar fm) `Imp` (lvar a `And` lvar b), phiA, phiB]
 transformPlus fm@(a `Or` b) =
   maybeComputePos fm $
   do cnfA <- transformPlus a
      cnfB <- transformPlus b
-     return $ Cnf.fromList [[nlit fm, lit a, lit b]] +&+ cnfA +&+ cnfB
+     return $ toCnf [[nlit fm, lit a, lit b]] +&+ cnfA +&+ cnfB
      -- bigAnd [(lvar fm) `Imp` (lvar a `Or` lvar b), phiA, phiB]
 transformPlus fm@(a `Iff` b) =
   maybeComputePos fm $
@@ -83,7 +97,7 @@ transformPlus fm@(a `Iff` b) =
      cnfAneg <- transformMinus a
      cnfBpos <- transformPlus b
      cnfBneg <- transformMinus b
-     return $ Cnf.fromList [[nlit fm, nlit a, lit b], [nlit fm, lit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
+     return $ toCnf [[nlit fm, nlit a, lit b], [nlit fm, lit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
      --  bigAnd [lvar fm `Imp` (lvar a `Iff` lvar b), cnfApos, cnfAneg, cnfBpos, cnfBneg]
      -- fm -> (a <-> b)
      -- -fm | ((-a | b) & (a | -b))
@@ -93,24 +107,24 @@ transformPlus fm@(a `Imp` b) =
   maybeComputePos fm $
   do cnfA <- transformMinus a
      cnfB <- transformPlus b
-     return $ Cnf.fromList [[nlit fm, nlit a, lit b]] +&+ cnfA +&+ cnfB
+     return $ toCnf [[nlit fm, nlit a, lit b]] +&+ cnfA +&+ cnfB
      -- bigAnd [lvar fm `Imp` (lvar a `Imp` lvar b), cnfA, cnfB]
 transformPlus fm@(Neg a)       = maybeComputePos fm $ transformMinus a
-transformPlus fm@(Var _)       = maybeComputePos fm $ return Cnf.empty
-transformPlus Top              = maybeComputePos Top $ return Cnf.empty
-transformPlus Bot              = maybeComputePos Bot $ return Cnf.empty
+transformPlus fm@(Var _)       = maybeComputePos fm $ return Cnf.top
+transformPlus Top              = maybeComputePos Top $ return Cnf.top
+transformPlus Bot              = maybeComputePos Bot $ return Cnf.top
 
 transformMinus fm@(a `And` b) =
   maybeComputeNeg fm $
   do cnfA <- transformMinus a
      cnfB <- transformMinus b
-     return $ Cnf.fromList [[nlit a, nlit b, lit fm]] +&+ cnfA +&+ cnfB
+     return $ toCnf [[nlit a, nlit b, lit fm]] +&+ cnfA +&+ cnfB
             -- bigAnd [(lvar a `And` lvar b) `Imp` (lvar fm), cnfA, cnfB]
 transformMinus fm@(a `Or` b) =
   maybeComputeNeg fm $ 
   do cnfA <- transformMinus a
      cnfB <- transformMinus b
-     return $ Cnf.fromList [[nlit a, lit fm], [nlit b, lit fm]] +&+ cnfA +&+ cnfB
+     return $ toCnf [[nlit a, lit fm], [nlit b, lit fm]] +&+ cnfA +&+ cnfB
      -- [(lvar a `Or` lvar b) `Imp` (lvar fm)  , cnfA, cnfB]
      -- -a & -b | fm === (-a | fm) & (-b | fm)
 transformMinus fm@(a `Iff` b) =
@@ -119,38 +133,38 @@ transformMinus fm@(a `Iff` b) =
      cnfAneg <- transformMinus a
      cnfBpos <- transformPlus b
      cnfBneg <- transformMinus b
-     return $ Cnf.fromList [[lit fm, lit a, lit b], [lit fm, nlit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
+     return $ toCnf [[lit fm, lit a, lit b], [lit fm, nlit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
 
 transformMinus fm@(a `Imp` b) =
   maybeComputeNeg fm $
   do cnfA <- transformPlus a
      cnfB <- transformMinus b
-     return $ Cnf.fromList [[lit fm, lit a], [lit fm, nlit b]] +&+ cnfA +&+ cnfB
+     return $ toCnf [[lit fm, lit a], [lit fm, nlit b]] +&+ cnfA +&+ cnfB
 -- bigAnd [lvar (lvar a `Imp` lvar b) `Imp` fm, cnfA, cnfB]
 
 transformMinus fm@(Neg a)     = maybeComputeNeg fm $ transformPlus a
-transformMinus fm@(Var _)     = maybeComputeNeg fm $ return Cnf.empty
-transformMinus Top            = maybeComputeNeg Top $ return Cnf.empty
-transformMinus Bot            = maybeComputeNeg Bot $ return Cnf.empty
+transformMinus fm@(Var _)     = maybeComputeNeg fm $ return Cnf.top
+transformMinus Top            = maybeComputeNeg Top $ return Cnf.top
+transformMinus Bot            = maybeComputeNeg Bot $ return Cnf.top
 
 transformList :: Ord a => [Formula a] -> PGSetMonad a (CNF (ExtendedAtom a))
-transformList fms = (mapM transform_ fms)  >>= return . foldr (+&+) Cnf.empty 
+transformList fms = (mapM transform_ fms)  >>= return . foldr (+&+) Cnf.top
   where transform_ fm = do cnf <- transformPlus fm
-                           return $ Cnf.fromList [[lit fm]] +&+ cnf
+                           return $ toCnf [[lit fm]] +&+ cnf
 
 transform :: Ord a => Formula a -> CNF (ExtendedAtom a)
-transform fm = State.evalState (transformList $ splitAnd fm) $ St {posSet = Set.empty, negSet = Set.empty}
+transform fm = State.evalState (transformList $ splitAnd fm) St{posSet = Set.empty, negSet = Set.empty}
   where splitAnd (a `And` b) = splitAnd a ++ splitAnd b
         splitAnd fm'          = [fm']
 
 -- size decreasing simplification
-simplify :: Formula a -> Formula a
-simplify ((Neg a) `Or` b) = a `Imp` b
-simplify (a `Or` (Neg b)) = b `Imp` a
-simplify (Neg  (Neg a))   = a
-simplify (Neg  ((Neg a) `And` (Neg b)))   = a `Or` b
-simplify (Neg  ((Neg a) `Or` (Neg b)))   = a `And` b
-simplify _ = undefined  -- TODO finish
+-- simplify :: Formula a -> Formula a
+-- simplify ((Neg a) `Or` b) = a `Imp` b
+-- simplify (a `Or` (Neg b)) = b `Imp` a
+-- simplify (Neg  (Neg a))   = a
+-- simplify (Neg  ((Neg a) `And` (Neg b)))   = a `Or` b
+-- simplify (Neg  ((Neg a) `Or` (Neg b)))   = a `And` b
+-- simplify _ = undefined  -- TODO finish
 
 baseAssignment :: Ord a => Assign (ExtendedAtom a) -> Assign a
 baseAssignment = fromMap . Map.foldWithKey f empty . toMap

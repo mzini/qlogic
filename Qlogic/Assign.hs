@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeSynonymInstances #-}
 module Qlogic.Assign where
 import qualified Data.Map as Map
 import qualified Data.List as List
