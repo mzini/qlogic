@@ -35,7 +35,7 @@ literal a = do literals <- State.get
 
 
 addClauses :: (Ord a) => Formula a -> MiniSat () a
-addClauses fm | Cnf.isContradiction cnf = lift $ Sat.contradiction
+addClauses fm | Cnf.isContradiction cnf = lift Sat.contradiction
               | otherwise               = Cnf.foldr f (return ()) cnf
   where cnf = Tseitin.transform fm
         f clause m = do mlits <- mapM mkLit $ Cnf.clauseToList clause
@@ -57,7 +57,7 @@ run :: MiniSat r a -> IO r
 run m = Sat.run $ State.evalStateT m Map.empty
 
 solve :: (Ord a)  => Formula a -> IO (Answer a)
-solve fm = run (solve_ fm)
+solve = run . solve_
 
 solve_ :: (Ord a) => Formula a -> MiniSat (Answer a) a
 solve_ fm = do addClauses fm

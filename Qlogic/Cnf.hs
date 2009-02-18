@@ -49,7 +49,7 @@ top = Empty
 
 bot :: CNF a
 -- ^ the singleton set containing the empty clause
-bot = Singleton (emptyClause)
+bot = Singleton emptyClause
 
 singleton :: Clause a -> CNF a
 -- ^ the singleton set containing the empty clause

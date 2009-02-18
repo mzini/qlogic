@@ -25,7 +25,7 @@ polyToNat :: Int -> DioPoly a -> NatFormula (PLVec a)
 polyToNat n = truncBots . bigPlus . map (monoToNat n)
 
 monoToNat :: Int -> DioMono a -> NatFormula (PLVec a)
-monoToNat n (DioMono m vp) = truncBots $ (natToFormula m) .*. (bigTimes . map (powerToNat n)) vp
+monoToNat n (DioMono m vp) = truncBots $ natToFormula m .*. (bigTimes . map (powerToNat n)) vp
 
 powerToNat :: Int -> VPower a -> NatFormula (PLVec a)
 powerToNat n (VPower v m) | m > 0     = varToNat n v .*. powerToNat n (VPower v (m - 1))

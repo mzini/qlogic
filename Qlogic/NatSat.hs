@@ -49,7 +49,7 @@ bigPlus = foldr (.+.) [Bot]
 ps .*. []     = []
 ps .*. [q]    = map (&&& q) ps
 ps .*. (q:qs) = r1 .+. r2
-  where r1 = (map (&&& q) ps) ++ padBots (length qs) []
+  where r1 = map (&&& q) ps ++ padBots (length qs) []
         r2 = ps .*. qs
 
 bigTimes :: [NatFormula a] -> NatFormula a
@@ -70,7 +70,7 @@ ps .>. qs | lengthdiff > 0 = padBots lengthdiff ps .>. qs
 [p] .=. [q]                = p <-> q
 ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
           | lengthdiff < 0 = ps .=. padBots (-1 * lengthdiff) qs
-          | otherwise      = ((head ps) <-> (head qs)) &&& (tail ps .=. tail qs)
+          | otherwise      = (head ps <-> head qs) &&& (tail ps .=. tail qs)
    where lengthdiff        = length qs - length ps
 
 varToNat :: Int -> a -> NatFormula (PLVec a)
@@ -82,7 +82,7 @@ baseFromVec (PLVec x _) = x
 
 natAssignment :: Ord a => Int -> A.Assign (PLVec a) -> NatAssign a
 natAssignment n = convMap [1..n] . A.toMap
-   where convMap ns ass = (Map.fromList . map (`convKey` ns) . map baseFromVec . Map.keys . firstIndices) ass
+   where convMap ns ass = (Map.fromList . map ((`convKey` ns) . baseFromVec) . Map.keys . firstIndices) ass
                        where firstIndices   = Map.filterWithKey (\(PLVec _ x) _ -> x == 1)
                              convKey k ns = (k, convKey' k ns)
                              convKey' k   = bListToNat . map (fromJust . (`Map.lookup` ass) . PLVec k)

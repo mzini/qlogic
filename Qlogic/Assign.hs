@@ -3,13 +3,12 @@ import qualified Data.Map as Map
 import qualified Data.List as List
 import Control.Monad (join)
 
-
 type Assign a = Map.Map a Bool
 
 type Binding a = (a, Bool)
 
 lookup :: Ord a => a -> Assign a -> Maybe Bool
-lookup a ass = Map.lookup a ass
+lookup = Map.lookup
 
 (|->) :: a -> Bool -> Binding a
 a |-> b = (a,b)
@@ -26,7 +25,3 @@ fromMap = id
 
 toMap :: Assign a -> Map.Map a Bool
 toMap = id
-
--- instance Show a => Show (Assign a) where 
---     show assign = wrap $ concatMap (\(k,v) -> show k ++ "|->" ++ show v) $ Map.toList assign 
---         where wrap a = "{" ++ a ++ "}"
