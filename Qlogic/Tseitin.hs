@@ -16,15 +16,10 @@ data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
                     | V a -- ^ an atom of the input formula
                       deriving (Eq, Ord, Show)
 
-data ExtendedLiteral a = Lit (Literal a)
-                       | TopLit
-                       | BotLit
-                         deriving (Eq)
-
-lit :: Formula a -> ExtendedLiteral (ExtendedAtom a)
-lit (Var x) = Lit $ PosLit $ V x
-lit Top     = TopLit
-lit Bot     = BotLit
+lit,nlit :: Formula a -> Literal (ExtendedAtom a)
+lit (Var x) = PosLit $ V x
+lit Top = TopLit
+lit Bot = BotLit
 lit (Neg x) = nlit x
 lit fm      = Lit $ PosLit $ L fm
 
@@ -110,9 +105,9 @@ transformPlus fm@(a `Imp` b) =
      return $ toCnf [[nlit fm, nlit a, lit b]] +&+ cnfA +&+ cnfB
      -- bigAnd [lvar fm `Imp` (lvar a `Imp` lvar b), cnfA, cnfB]
 transformPlus fm@(Neg a)       = maybeComputePos fm $ transformMinus a
-transformPlus fm@(Var _)       = maybeComputePos fm $ return Cnf.top
-transformPlus Top              = maybeComputePos Top $ return Cnf.top
-transformPlus Bot              = maybeComputePos Bot $ return Cnf.top
+transformPlus fm@(Var _)       = maybeComputePos fm $ return Cnf.empty
+transformPlus Top              = maybeComputePos Top $ return Cnf.empty
+transformPlus Bot              = maybeComputePos Bot $ return Cnf.empty
 
 transformMinus fm@(a `And` b) =
   maybeComputeNeg fm $
@@ -143,9 +138,9 @@ transformMinus fm@(a `Imp` b) =
 -- bigAnd [lvar (lvar a `Imp` lvar b) `Imp` fm, cnfA, cnfB]
 
 transformMinus fm@(Neg a)     = maybeComputeNeg fm $ transformPlus a
-transformMinus fm@(Var _)     = maybeComputeNeg fm $ return Cnf.top
-transformMinus Top            = maybeComputeNeg Top $ return Cnf.top
-transformMinus Bot            = maybeComputeNeg Bot $ return Cnf.top
+transformMinus fm@(Var _)     = maybeComputeNeg fm $ return Cnf.empty
+transformMinus Top            = maybeComputeNeg Top $ return Cnf.empty
+transformMinus Bot            = maybeComputeNeg Bot $ return Cnf.empty
 
 transformList :: Ord a => [Formula a] -> PGSetMonad a (CNF (ExtendedAtom a))
 transformList fms = (mapM transform_ fms)  >>= return . foldr (+&+) Cnf.top

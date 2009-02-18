@@ -22,7 +22,7 @@ module Qlogic.Formula
   ) 
 where
 
-data Formula a = Var a 
+data Formula a = Atom a
                | And (Formula a) (Formula a)
                | Or (Formula a) (Formula a)
                | Iff (Formula a) (Formula a)
@@ -94,25 +94,25 @@ twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
 
 var :: a -> Formula a 
 -- ^ lift a variable to a formula
-var = Var
+var = Atom
 
 -- utility functions
 
 isVariable :: Formula a -> Bool
 -- ^ returns 'True' if the given formula is a variable
-isVariable (Var _) = True
+isVariable (Atom _) = True
 isVariable _       = True
 
 isAtom :: Formula a -> Bool
 -- ^ returns 'True' if the given formula is a variable, 'Top' or 'Bot'
-isAtom (Var _) = True
+isAtom (Atom _) = True
 isAtom Top     = True
 isAtom Bot     = True
 isAtom _       = False
 
 isLiteral :: Formula a -> Bool
 -- ^ returns 'True' if the given formula is a variable or its negation
-isLiteral (Neg (Var _)) = True
-isLiteral (Var _)       = True
+isLiteral (Neg (Atom _)) = True
+isLiteral (Atom _)       = True
 isLiteral _             = False
 

@@ -1,9 +1,17 @@
 module Qlogic.NatSat where
 
 import Qlogic.Formula
+import qualified Qlogic.Assign as A
+import qualified Qlogic.Tseitin as T
+import qualified Data.Map as Map
+import Data.Maybe (fromJust)
+import Data.List (nub)
+import Foreign.Marshal.Utils (fromBool)
 
 type NatFormula a = [Formula a]
 data PLVec a = PLVec a Int
+  deriving (Eq, Ord, Show)
+type NatAssign a = Map.Map a Int
 
 natToFormula :: Int -> NatFormula a
 natToFormula n | n == 0    = [Bot]
@@ -66,5 +74,16 @@ ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
    where lengthdiff        = length qs - length ps
 
 varToNat :: Int -> a -> NatFormula (PLVec a)
-varToNat n v | n > 0     = varToNat (n - 1) v ++ [Var (PLVec v n)]
+varToNat n v | n > 0     = varToNat (n - 1) v ++ [Atom (PLVec v n)]
              | otherwise = []
+
+baseFromVec :: PLVec a -> a
+baseFromVec (PLVec x _) = x
+
+natAssignment :: Ord a => Int -> A.Assign (PLVec a) -> NatAssign a
+natAssignment n = convMap [1..n] . A.toMap
+   where convMap ns ass = (Map.fromList . map (`convKey` ns) . map baseFromVec . Map.keys . firstIndices) ass
+                       where firstIndices   = Map.filterWithKey (\(PLVec _ x) _ -> x == 1)
+                             convKey k ns = (k, convKey' k ns)
+                             convKey' k   = bListToNat . map (fromJust . (`Map.lookup` ass) . PLVec k)
+                             bListToNat   = foldl (\x y -> 2 * x + y) 0 . map fromBool
