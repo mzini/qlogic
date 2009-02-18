@@ -16,9 +16,7 @@ module Qlogic.Formula
   , oneOrThree
   , twoOrThree
    -- ** Predicates
-  , isVariable
-  , isLiteral
-  , isAtom
+--  , isAtom
   ) 
 where
 
@@ -98,21 +96,20 @@ var = Atom
 
 -- utility functions
 
-isVariable :: Formula a -> Bool
--- ^ returns 'True' if the given formula is a variable
-isVariable (Atom _) = True
-isVariable _       = True
+-- isVariable :: Formula a -> Bool
+-- -- ^ returns 'True' if the given formula is a variable
+-- isVariable (Atom _) = True
+-- isVariable _       = True
 
-isAtom :: Formula a -> Bool
--- ^ returns 'True' if the given formula is a variable, 'Top' or 'Bot'
-isAtom (Atom _) = True
-isAtom Top     = True
-isAtom Bot     = True
-isAtom _       = False
+-- isAtom :: Formula a -> Bool
+-- -- ^ returns 'True' if the given formula is a variable, 'Top' or 'Bot'
+-- isAtom (Atom _) = True
+-- isAtom Top     = True
+-- isAtom Bot     = True
+-- isAtom _       = False
 
-isLiteral :: Formula a -> Bool
--- ^ returns 'True' if the given formula is a variable or its negation
-isLiteral (Neg (Atom _)) = True
-isLiteral (Atom _)       = True
-isLiteral _             = False
-
+-- isLiteral :: Formula a -> Bool
+-- -- ^ returns 'True' if the given formula is a variable or its negation
+-- isLiteral (Neg (Atom _)) = True
+-- isLiteral (Atom _)       = True
+-- isLiteral _             = False
