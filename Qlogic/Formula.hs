@@ -2,7 +2,9 @@ module Qlogic.Formula
   (-- * Types
    Formula(..) 
   -- * Operations 
-  -- ** Boolean Connectives for formulas
+  , eval 
+  , simplify
+  -- ** Boolean Connectives for formulas, simplifying
   , (|||)
   , (&&&) 
   , (-->) 
@@ -15,11 +17,13 @@ module Qlogic.Formula
   , bigOr
   , oneOrThree
   , twoOrThree
-   -- ** Predicates
 --  , isAtom
   ) 
 where
-
+import qualified Qlogic.Assign as Assign
+import Qlogic.Assign (Assign)
+import Test.QuickCheck 
+import qualified Data.Maybe as Maybe
 data Formula a = Atom a
                | And (Formula a) (Formula a)
                | Or (Formula a) (Formula a)
@@ -28,6 +32,15 @@ data Formula a = Atom a
                | Neg (Formula a)
                | Top 
                | Bot deriving (Eq, Ord, Show)
+
+simplify :: Formula a -> Formula a
+-- ^ performs basic simplification of formulas
+simplify (a `And` b) = simplify a &&& simplify b
+simplify (a `Or` b)  = simplify a ||| simplify b
+simplify (a `Iff` b) = simplify a <-> simplify b
+simplify (a `Imp` b) = simplify a --> simplify b
+simplify (Neg a)     = neg $ simplify a
+simplify a           = a
 
 (&&&) :: Formula a -> Formula a -> Formula a 
 -- ^conjunction
@@ -93,6 +106,18 @@ twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
 var :: a -> Formula a 
 -- ^ lift a variable to a formula
 var = Atom
+
+
+eval :: Ord a => Formula a -> Assign a -> Bool
+-- ^ evaluate a 'Formula' under the given assignment
+eval (Atom a)    ass = Maybe.fromMaybe False $ Assign.lookup a ass
+eval (a `And` b) ass = eval a ass && eval b ass
+eval (a `Or` b)  ass = eval a ass || eval b ass
+eval (a `Iff` b) ass = eval a ass == eval b ass
+eval (a `Imp` b) ass = not (eval a ass) || eval b ass
+eval (Neg a)     ass = not (eval a ass)
+eval Top _           = True
+eval Bot _           = False
 
 -- utility functions
 

@@ -9,6 +9,7 @@ license:            LGPL
 cabal-version:      >= 1.6
 build-type:	    Simple
 
+
 library
  exposed-modules:   Qlogic.Diophantine
                     Qlogic.Formula
@@ -17,31 +18,47 @@ library
                     Qlogic.NatSat
                     Qlogic.Tseitin
                     Qlogic.Cnf
--- Folkung Sat Interface
  other-modules:     Sat
                     Name
                     Str
                     Form
-
  build-depends:     containers, mtl, base, syb
-
- hs-source-dirs:    .
-                    Folkung/Haskell
-
  extensions:        CPP
                     ForeignFunctionInterface
                     Generics
                     TypeOperators
                     GeneralizedNewtypeDeriving
-
  includes:          Folkung/instantiate/Wrapper.h
-
-
  extra-lib-dirs:    Folkung/instantiate
                     Folkung/minisat/mtl
                     Folkung/minisat/current-base
-
  extra-libraries:   stdc++
                     instantiate
                     minisat
+ hs-source-dirs:    .
+                    Folkung/Haskell
 
+executable qlogic-test
+ main-is:           Qlogic/Test/Main.hs
+ build-depends:     containers, mtl, base, syb, QuickCheck
+ other-modules:     Qlogic.Diophantine
+                    Qlogic.Formula
+                    Qlogic.Assign
+                    Qlogic.MiniSat
+                    Qlogic.NatSat
+                    Qlogic.Tseitin
+                    Qlogic.Cnf
+                    Sat
+                    Name
+                    Str
+                    Form
+ hs-source-dirs:    .
+                    Folkung/Haskell
+ includes:          Folkung/instantiate/Wrapper.h
+ ghc-options:       -fhpc
+ extra-lib-dirs:    Folkung/instantiate
+                    Folkung/minisat/mtl
+                    Folkung/minisat/current-base
+ extra-libraries:   stdc++
+                    instantiate
+                    minisat
