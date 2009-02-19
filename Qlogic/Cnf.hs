@@ -91,8 +91,8 @@ implFree (a `Iff` b) = (Neg ifa `Or` ifb) `And` (ifa `Or` Neg ifb)
         ifb = implFree b
 implFree (Neg a)     = Neg $ implFree a
 implFree x           = x
-                   
- 
+
+
 nnf (Neg (a `Or` b))  = nnf (Neg a) `And` nnf (Neg b)
 nnf (Neg (a `And` b)) = nnf (Neg a) `Or` nnf (Neg b)
 nnf (Neg (Neg a))     = nnf a

@@ -30,6 +30,18 @@ truncBots f@[n]    = f
 truncBots (Bot:ps) = truncBots ps
 truncBots f@(_:_)  = f
 
+truncTo :: Int -> NatFormula a -> NatFormula a
+truncTo _ []                         = []
+truncTo n qs@(p:ps) | length qs <= n = qs
+                    | otherwise      = truncTo n ps
+
+natToBits :: Int -> Int
+natToBits n | n <= 1    = 1
+            | otherwise = (succ . natToBits . (`div` 2)) n
+
+bitsToNat :: Int -> Int
+bitsToNat n = (2 ^ n) - 1
+
 (.+.) :: NatFormula a -> NatFormula a -> NatFormula a
 [] .+. []                  = []
 [p] .+. [q]                = [p &&& q, neg (p <-> q)]
@@ -73,9 +85,13 @@ ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
           | otherwise      = (head ps <-> head qs) &&& (tail ps .=. tail qs)
    where lengthdiff        = length qs - length ps
 
+-- creates a variable with enough bist to represent n
 varToNat :: Int -> a -> NatFormula (PLVec a)
-varToNat n v | n > 0     = varToNat (n - 1) v ++ [Atom (PLVec v n)]
-             | otherwise = []
+varToNat n = nBitVar (natToBits n)
+
+nBitVar :: Int -> a -> NatFormula (PLVec a)
+nBitVar n v | n > 0     = nBitVar (n - 1) v ++ [Atom (PLVec v n)]
+            | otherwise = []
 
 baseFromVec :: PLVec a -> a
 baseFromVec (PLVec x _) = x

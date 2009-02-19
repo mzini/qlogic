@@ -62,3 +62,8 @@ executable qlogic-test
  extra-libraries:   stdc++
                     instantiate
                     minisat
+ extensions:        CPP
+                    ForeignFunctionInterface
+                    Generics
+                    TypeOperators
+                    GeneralizedNewtypeDeriving
