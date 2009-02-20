@@ -42,6 +42,7 @@ natToBits n | n <= 1    = 1
 bitsToNat :: Int -> Int
 bitsToNat n = (2 ^ n) - 1
 
+
 (.+.) :: NatFormula a -> NatFormula a -> NatFormula a
 [] .+. []                  = []
 [p] .+. [q]                = [p &&& q, neg (p <-> q)]

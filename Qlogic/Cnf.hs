@@ -8,7 +8,7 @@ module Qlogic.Cnf
   , emptyClause
   , clause 
   , clauseToList
-  -- * Conjunctive Normal Form
+  -- * Conjunctive Normal Forms
   , CNF
   , top
   , bot

@@ -1,4 +1,11 @@
-module Qlogic.MiniSat where
+module Qlogic.MiniSat 
+ (run
+  , Answer(..)
+  , solve
+  , solveCnf
+ )
+
+where 
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Map as Map
 import Prelude hiding (mapM_)
@@ -38,7 +45,7 @@ extractAssign = do literals <- State.get
                    Map.foldWithKey f (return Assign.empty) literals
     where f k l m = do assign <- m
                        v <- lift $ Sat.getModelValue l
-                       return $ Assign.bind [k |-> v] assign
+                       return $ Assign.add [k |-> v] assign
 
 run :: MiniSat r a -> IO r
 run m = Sat.run $ State.evalStateT m Map.empty

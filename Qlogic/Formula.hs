@@ -4,17 +4,18 @@ module Qlogic.Formula
   -- * Operations 
   , eval 
   , simplify
-  -- ** Boolean Connectives for formulas, simplifying
+  -- ** Standard Boolean connectives, simplifying
   , (|||)
   , (&&&) 
   , (-->) 
   , (<->) 
-  , var 
+  , atom 
   , neg 
   , top 
   , bot 
   , bigAnd
   , bigOr
+  -- ** non-standard Boolean connectives 
   , oneOrThree
   , twoOrThree
 --  , isAtom
@@ -97,15 +98,17 @@ bigOr :: [Formula a] -> Formula a
 -- ^ disjunction of multiple formulas
 bigOr = foldr (|||) Bot
 
+atom :: a -> Formula a 
+-- ^ lift an atom to a formula
+atom = Atom
+
 oneOrThree :: Formula a -> Formula a -> Formula a -> Formula a
+-- ^ demands that exacly one or all three formulas hold
 oneOrThree p q r = p <-> q <-> r
 
 twoOrThree :: Formula a -> Formula a -> Formula a -> Formula a
+-- ^ demands that exacly two or all three formulas hold.
 twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
-
-var :: a -> Formula a 
--- ^ lift a variable to a formula
-var = Atom
 
 
 eval :: Ord a => Formula a -> Assign a -> Bool
