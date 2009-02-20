@@ -1,4 +1,15 @@
-module Qlogic.Diophantine where
+module Qlogic.Diophantine
+  (
+  -- * Types
+  DioFormula
+  , DioAtom(..)
+  , DioPoly
+  , DioMono(..)
+  , VPower(..)
+  -- * Operations
+  , toFormulaSimp
+  , toFormula
+  ) where
 
 import Qlogic.NatSat
 import Qlogic.Formula
@@ -22,6 +33,8 @@ toFormulaGen f n Top                = Top
 toFormulaGen f n Bot                = Bot
 
 toFormulaSimp :: Int -> DioFormula a -> Formula (PLVec a)
+-- ^ translates a Diophantine constraint into a propositional formula,
+--   where variables are instantiated by values between 0 and n.
 toFormulaSimp = toFormulaGen polyToNatSimp
 
 polyToNatSimp :: Int -> DioPoly a -> NatFormula (PLVec a)
@@ -37,7 +50,13 @@ powerToNatSimp n (VPower v m) | m > 0     = varToNat n v .*. powerToNatSimp n (V
 -- Optimisation c of Section 5 in the Fuhs-et-al paper
 -- prunes all "numbers" to their maximum length based on
 -- the assumption that the value of all variables is at most n
+-- FIXME: AS: [v]<=n muss noch erzwungen werden
 toFormula :: Int -> DioFormula a -> Formula (PLVec a)
+-- ^ translates a Diophantine constraint into a propositional formula,
+--   where variables are instantiated by values between 0 and n.
+--   this function tracks the maximum value of all subformulas.
+--   the length of all vectors is possibly pruned according to these
+--   maximum values
 toFormula = toFormulaGen polyToNat
 
 polyToNat :: Int -> DioPoly a -> NatFormula  (PLVec a)

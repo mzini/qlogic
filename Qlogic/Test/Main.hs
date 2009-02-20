@@ -27,7 +27,7 @@ arbFm m = frequency
           , (1, bin Imp)
           , (1, liftM Neg (arbFm $ m - 1 ))
           ]
-  where bin f = do liftM2 f (arbFm m') (arbFm m')
+  where bin f = liftM2 f (arbFm m') (arbFm m')
         m' = m `div` 2
 
 -- sat properties

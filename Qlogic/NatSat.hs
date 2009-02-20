@@ -1,4 +1,24 @@
-module Qlogic.NatSat where
+module Qlogic.NatSat
+  (
+  -- * Types
+  NatFormula
+  , PLVec
+  , NatAssign
+  -- * Operations
+  , natToFormula
+  , truncBots
+  , truncTo
+  , natToBits
+  , bitsToNat
+  , (.+.)
+  , bigPlus
+  , (.*.)
+  , bigTimes
+  , (.>.)
+  , (.=.)
+  , varToNat
+  , natAssignment
+  ) where
 
 import Qlogic.Formula
 import qualified Qlogic.Assign as A
@@ -14,6 +34,7 @@ data PLVec a = PLVec a Int
 type NatAssign a = Map.Map a Int
 
 natToFormula :: Int -> NatFormula a
+-- ^ transforms a natural number into a list of Top/Bot values
 natToFormula n | n == 0    = [Bot]
                | n == 1    = [Top]
                | n < 0     = error "Only natural numbers allowed in argument!"
@@ -25,17 +46,23 @@ padBots n | n == 0    = id
           | otherwise = error "Only natural numbers allowed in argument!"
 
 truncBots :: NatFormula a -> NatFormula a
+-- ^ removes leading Bottoms from a list of propositional formulas
+--   however, the last Bot in a list consisting only of Bots is never removed
 truncBots []       = []
 truncBots f@[n]    = f
 truncBots (Bot:ps) = truncBots ps
 truncBots f@(_:_)  = f
 
 truncTo :: Int -> NatFormula a -> NatFormula a
+-- ^ If the given list of propositional formulas is longer than n, its length is reduced
+--   to n by chopping off the first elements
 truncTo _ []                         = []
 truncTo n qs@(p:ps) | length qs <= n = qs
                     | otherwise      = truncTo n ps
 
 natToBits :: Int -> Int
+-- ^ calculates the necessary length of a list of Top/Bot values for representing
+--   the given natural number
 natToBits n | n <= 1    = 1
             | otherwise = (succ . natToBits . (`div` 2)) n
 
@@ -44,6 +71,8 @@ bitsToNat n = (2 ^ n) - 1
 
 
 (.+.) :: NatFormula a -> NatFormula a -> NatFormula a
+-- ^ performs addition of natural numbers in the representation as a list
+--   of propositional formulas
 [] .+. []                  = []
 [p] .+. [q]                = [p &&& q, neg (p <-> q)]
 ps .+. qs | lengthdiff > 0 = padBots lengthdiff ps .+. qs
@@ -56,9 +85,13 @@ ps .+. qs | lengthdiff > 0 = padBots lengthdiff ps .+. qs
         r          = head rs
 
 bigPlus :: [NatFormula a] -> NatFormula a
+-- ^ calculates the sum of a list of natural numbers in their representation
+--   as lists of propositional formulas
 bigPlus = foldr (.+.) [Bot]
 
 (.*.) :: NatFormula a -> NatFormula a -> NatFormula a
+-- ^ performs multiplication of natural numbers in the representation as a list
+--   of propositional formulas
 ps .*. []     = []
 ps .*. [q]    = map (&&& q) ps
 ps .*. (q:qs) = r1 .+. r2
@@ -66,9 +99,13 @@ ps .*. (q:qs) = r1 .+. r2
         r2 = ps .*. qs
 
 bigTimes :: [NatFormula a] -> NatFormula a
+-- ^ calculates the product of a list of natural numbers in their representation
+--   as lists of propositional formulas
 bigTimes = foldr (.*.) [Top]
 
 (.>.) :: NatFormula a -> NatFormula a -> Formula a
+-- ^ performs "greater than" comparisons of natural numbers in the representation
+--   as a list of propositional formulas
 [] .>. []                  = Bot
 [p] .>. [q]                = p &&& neg q
 ps .>. qs | lengthdiff > 0 = padBots lengthdiff ps .>. qs
@@ -79,6 +116,8 @@ ps .>. qs | lengthdiff > 0 = padBots lengthdiff ps .>. qs
          q                 = head qs
 
 (.=.) :: NatFormula a -> NatFormula a -> Formula a
+-- ^ performs equality comparisons of natural numbers in the representation
+--   as a list of propositional formulas
 [] .=. []                  = Top
 [p] .=. [q]                = p <-> q
 ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
@@ -86,9 +125,12 @@ ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
           | otherwise      = (head ps <-> head qs) &&& (tail ps .=. tail qs)
    where lengthdiff        = length qs - length ps
 
--- creates a variable with enough bist to represent n
+-- creates a variable with enough bits to represent n
 varToNat :: Int -> a -> NatFormula (PLVec a)
-varToNat n = nBitVar (natToBits n)
+-- ^ creates a "natural number variable" encoded by a list of
+--   propositional variables. The length of the list is chosen
+--   to be exactly enough in order to represent n
+varToNat = nBitVar . natToBits
 
 nBitVar :: Int -> a -> NatFormula (PLVec a)
 nBitVar n v | n > 0     = nBitVar (n - 1) v ++ [Atom (PLVec v n)]
@@ -98,6 +140,8 @@ baseFromVec :: PLVec a -> a
 baseFromVec (PLVec x _) = x
 
 natAssignment :: Ord a => Int -> A.Assign (PLVec a) -> NatAssign a
+-- ^ converts a propositional assignment into an assignment for constraints
+--   over natural numbers encoded by propositional formulas
 natAssignment n = convMap [1..n] . A.toMap
    where convMap ns ass = (Map.fromList . map ((`convKey` ns) . baseFromVec) . Map.keys . firstIndices) ass
                        where firstIndices   = Map.filterWithKey (\(PLVec _ x) _ -> x == 1)

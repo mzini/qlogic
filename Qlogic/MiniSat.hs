@@ -41,8 +41,7 @@ literal a = do literals <- State.get
                      return $ Map.lookup a literals
 
 extractAssign :: Ord a => MiniSat (Assign.Assign a) a
-extractAssign = do literals <- State.get
-                   Map.foldWithKey f (return Assign.empty) literals
+extractAssign = State.get >>= Map.foldWithKey f (return Assign.empty)
     where f k l m = do assign <- m
                        v <- lift $ Sat.getModelValue l
                        return $ Assign.add [k |-> v] assign

@@ -59,8 +59,6 @@ singleton :: Clause a -> CNF a
 -- ^ the singleton set containing the empty clause
 singleton = Singleton
 
-
-
 fromList :: [Clause a] -> CNF a
 -- ^ translate a 'List' of 'Clause's to a 'CNF'
 fromList []     = Empty
@@ -92,7 +90,6 @@ implFree (a `Iff` b) = (Neg ifa `Or` ifb) `And` (ifa `Or` Neg ifb)
 implFree (Neg a)     = Neg $ implFree a
 implFree x           = x
 
-
 nnf (Neg (a `Or` b))  = nnf (Neg a) `And` nnf (Neg b)
 nnf (Neg (a `And` b)) = nnf (Neg a) `Or` nnf (Neg b)
 nnf (Neg (Neg a))     = nnf a
@@ -106,8 +103,8 @@ cnf Top                = top
 cnf Bot                = bot
 cnf (a `And` b)        = cnf a +&+ cnf b
 cnf (a `Or` b)         = distr (cnf a) (cnf b)
-cnf (Neg (Atom a))     = singleton $ clause $ [NegLit a]
-cnf (Atom a)           = singleton $ clause $ [PosLit a]
+cnf (Neg (Atom a))     = singleton $ clause [NegLit a]
+cnf (Atom a)           = singleton $ clause [PosLit a]
 
 distr Empty _                     = Empty
 distr _ Empty                     = Empty
