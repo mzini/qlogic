@@ -1,8 +1,13 @@
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Qlogic.Formula 
   (-- * Types
    Formula(..) 
+  , Atom(..)
+  , AtomClass
   -- * Operations 
-  , eval 
   , simplify
   -- ** Standard Boolean connectives, simplifying
   , (|||)
@@ -21,20 +26,37 @@ module Qlogic.Formula
 --  , isAtom
   ) 
 where
-import qualified Qlogic.Assign as Assign
-import Qlogic.Assign (Assign)
-import Test.QuickCheck 
-import qualified Data.Maybe as Maybe
-data Formula a = Atom a
-               | And (Formula a) (Formula a)
-               | Or (Formula a) (Formula a)
-               | Iff (Formula a) (Formula a)
-               | Imp (Formula a) (Formula a)
-               | Neg (Formula a)
-               | Top 
-               | Bot deriving (Eq, Ord, Show)
+import Data.Typeable
 
-simplify :: Formula a -> Formula a
+import qualified Data.Maybe as Maybe
+
+class (Eq a, Ord a, Show a, Typeable a) => AtomClass a 
+data Atom = forall a. (AtomClass a) => Atom a
+
+instance Eq Atom where
+  Atom (a :: a) == Atom (b :: b) | typeOf a == typeOf b = (cast a :: Maybe a) == (cast b :: Maybe a)
+                                | otherwise = False 
+
+instance Ord Atom where 
+ Atom (a :: a) >= Atom (b :: b) = (ta == tb && (cast a :: Maybe a) >= (cast b :: Maybe a)) || show ta >= show tb 
+   where ta = typeOf a 
+         tb = typeOf b
+
+instance Show Atom where
+  show (Atom a) = "Atom " ++ show a
+
+data Formula = A Atom
+             | And Formula Formula
+             | Or  Formula Formula
+             | Iff Formula Formula
+             | Imp Formula Formula
+             | Neg Formula
+             | Top 
+             | Bot deriving (Eq, Ord, Typeable, Show)
+
+
+
+simplify :: Formula -> Formula
 -- ^ performs basic simplification of formulas
 simplify (a `And` b) = simplify a &&& simplify b
 simplify (a `Or` b)  = simplify a ||| simplify b
@@ -43,7 +65,7 @@ simplify (a `Imp` b) = simplify a --> simplify b
 simplify (Neg a)     = neg $ simplify a
 simplify a           = a
 
-(&&&) :: Formula a -> Formula a -> Formula a 
+(&&&) :: Formula -> Formula -> Formula 
 -- ^conjunction
 Top &&& b   = b
 Bot &&& _   = Bot
@@ -51,7 +73,7 @@ a   &&& Top = a
 _   &&& Bot = Bot
 a   &&& b   = a `And` b
 
-(|||) :: Formula a -> Formula a -> Formula a 
+(|||) :: Formula -> Formula -> Formula 
 -- ^disjunction
 Top ||| _   = Top
 Bot ||| b   = b
@@ -59,7 +81,7 @@ _   ||| Top = Top
 a   ||| Bot = a
 a   ||| b   = a `Or` b
 
-(<->) :: Formula a -> Formula a -> Formula a 
+(<->) :: Formula -> Formula -> Formula 
 -- ^if and only if
 Top <-> b   = b
 Bot <-> b   = neg b
@@ -67,7 +89,7 @@ a   <-> Top = a
 a   <-> Bot = neg a
 a   <-> b   = a `Iff` b
 
-(-->) :: Formula a -> Formula a -> Formula a 
+(-->) :: Formula -> Formula -> Formula 
 -- ^implication
 Top --> b   = b
 Bot --> _   = Top
@@ -75,68 +97,56 @@ _   --> Top = Top
 a   --> Bot = neg a
 a   --> b   = a `Imp` b
 
-neg :: Formula a -> Formula a
+neg :: Formula -> Formula
 -- ^negation
 neg Bot     = Top
 neg Top     = Bot
 neg (Neg a) = a
 neg a       = Neg a
 
-bot :: Formula a
+bot :: Formula
 -- ^ falsity
 bot = Bot
 
-top :: Formula a
+top :: Formula
 -- ^ truth
 top = Top
 
-bigAnd :: [Formula a] -> Formula a
+bigAnd :: [Formula] -> Formula
 -- ^ conjunction of multiple formulas
 bigAnd = foldr (&&&) Top
 
-bigOr :: [Formula a] -> Formula a
+bigOr :: [Formula] -> Formula
 -- ^ disjunction of multiple formulas
 bigOr = foldr (|||) Bot
 
-atom :: a -> Formula a 
+atom :: AtomClass a => a -> Formula 
 -- ^ lift an atom to a formula
-atom = Atom
+atom = A . Atom
 
-oneOrThree :: Formula a -> Formula a -> Formula a -> Formula a
+oneOrThree :: Formula -> Formula -> Formula -> Formula
 -- ^ demands that exacly one or all three formulas hold
 oneOrThree p q r = p <-> q <-> r
 
-twoOrThree :: Formula a -> Formula a -> Formula a -> Formula a
+twoOrThree :: Formula -> Formula -> Formula -> Formula
 -- ^ demands that exacly two or all three formulas hold.
 twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
 
-
-eval :: Ord a => Formula a -> Assign a -> Bool
--- ^ evaluate a 'Formula' under the given assignment
-eval (Atom a)    ass = Maybe.fromMaybe False $ Assign.lookup a ass
-eval (a `And` b) ass = eval a ass && eval b ass
-eval (a `Or` b)  ass = eval a ass || eval b ass
-eval (a `Iff` b) ass = eval a ass == eval b ass
-eval (a `Imp` b) ass = not (eval a ass) || eval b ass
-eval (Neg a)     ass = not (eval a ass)
-eval Top _           = True
-eval Bot _           = False
-
 -- utility functions
 
--- isVariable :: Formula a -> Bool
+-- isVariable :: Formula -> Bool
 -- -- ^ returns 'True' if the given formula is a variable
 -- isVariable (Atom _) = True
 -- isVariable _       = True
 
--- isAtom :: Formula a -> Bool
+-- isAtom :: Formula -> Bool
 -- -- ^ returns 'True' if the given formula is a variable, 'Top' or 'Bot'
 -- isAtom (Atom _) = True
 -- isAtom Top     = True
 -- isAtom Bot     = True
 -- isAtom _       = False
 
--- isLiteral :: Formula a -> Bool
+-- isLiteral :: Formula -> Bool
 -- -- ^ returns 'True' if the given formula is a variable or its negation
 -- isLiteral (Neg (Atom _)) = True
 -- isLiteral (Atom _)       = True

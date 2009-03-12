@@ -1,35 +1,38 @@
-module Qlogic.Tseitin 
-  (ExtendedAtom,
-   transform,
-   baseAssignment
-  )
+{-# LANGUAGE DeriveDataTypeable #-}
+
+module Qlogic.Tseitin (transform)
+
 where
 import Control.Monad (liftM)
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import Data.Typeable
 import Qlogic.Assign (Assign, toMap, fromMap, empty)
 import Qlogic.Formula
 import qualified Qlogic.Cnf as Cnf
 import Qlogic.Cnf (CNF, (+&+), Literal(..))
 
-data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
-                    | V a -- ^ an atom of the input formula
-                      deriving (Eq, Ord, Show)
+-- data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
+--                     | V a -- ^ an atom of the input formula
+--                       deriving (Eq, Ord, Show)
 
-data ExtendedLiteral a = Lit (Literal a)
-                       | TopLit
-                       | BotLit
-                         deriving (Eq)
+data ExtendedLiteral = Lit Literal
+                     | TopLit
+                     | BotLit
+                       deriving (Eq, Ord, Show)
 
-lit :: Formula a -> ExtendedLiteral (ExtendedAtom a)
-lit (Atom x) = Lit $ PosLit $ V x
+data Form = Form Formula deriving (Eq, Ord, Show, Typeable)
+instance AtomClass Form 
+
+lit :: Formula -> ExtendedLiteral
+lit (A x)   = Lit $ PosLit $ x
 lit Top     = TopLit
 lit Bot     = BotLit
 lit (Neg x) = nlit x
-lit fm      = Lit $ PosLit $ L fm
+lit fm      = Lit $ PosLit $ Atom $ Form fm
 
-nlit :: Formula a -> ExtendedLiteral (ExtendedAtom a)
+nlit :: Formula -> ExtendedLiteral
 nlit fm = negate' $ lit fm
   where negate' (Lit (PosLit x)) = Lit (NegLit x)
         negate' (Lit (NegLit x)) = Lit (PosLit x)
@@ -37,37 +40,38 @@ nlit fm = negate' $ lit fm
         negate' BotLit           = TopLit
 
 
-toCnf :: Eq a => [[ExtendedLiteral a]] -> CNF a
+toCnf :: [[ExtendedLiteral]] -> CNF
 toCnf = foldr appendClause Cnf.top
   where appendClause cl cnf | TopLit `elem` cl = cnf
                             | otherwise        = Cnf.singleton (Cnf.clause $ foldr lower [] cl) +&+ cnf
         lower BotLit l = l
         lower (Lit a) l = a:l
 
+data St = St { posSet :: Set.Set Formula -- ^  lists all formulas with positive CNF constructed
+             , negSet :: Set.Set Formula -- ^ lists all formulas with negative CNF constructed
+             }
+
 -- | The state monad for constructing CNFs exploits sharing by keeping
 -- a record of so far translated subformulas
-type PGSetMonad a r = State.State (St a) r
+type PGSetMonad r = State.State St r
 
-data St a = St { posSet :: Set.Set (Formula a) -- ^  lists all formulas with positive CNF constructed
-               , negSet :: Set.Set (Formula a) -- ^ lists all formulas with negative CNF constructed
-               }
 
-getPSet :: PGSetMonad a (Set.Set (Formula a))
-getNSet :: PGSetMonad a (Set.Set (Formula a))
+getPSet :: PGSetMonad (Set.Set Formula)
+getNSet :: PGSetMonad (Set.Set Formula)
 
 getPSet = liftM posSet State.get
 getNSet = liftM negSet State.get
 
-setPSet :: Set.Set (Formula a) -> PGSetMonad a ()
-setNSet :: Set.Set (Formula a) -> PGSetMonad a ()
+setPSet :: Set.Set Formula -> PGSetMonad ()
+setNSet :: Set.Set Formula -> PGSetMonad ()
 setPSet set = State.modify $ \s -> s {posSet = set}
 setNSet set = State.modify $ \s -> s {negSet = set}
 
-maybeCompute_  :: Ord a => (PGSetMonad a (Set.Set (Formula a))) 
-               -> (Set.Set (Formula a) -> PGSetMonad a ()) 
-               -> Formula a 
-               -> PGSetMonad a (CNF (ExtendedAtom a)) 
-               -> PGSetMonad a (CNF (ExtendedAtom a))
+maybeCompute_  :: (PGSetMonad (Set.Set Formula)) 
+               -> (Set.Set Formula -> PGSetMonad ()) 
+               -> Formula 
+               -> PGSetMonad CNF 
+               -> PGSetMonad CNF
 
 maybeCompute_ getSet setSet fm m = 
   do s <- getSet
@@ -75,11 +79,11 @@ maybeCompute_ getSet setSet fm m =
        False -> setSet (Set.insert fm s) >> m
        True  -> return Cnf.top
 
-maybeComputePos, maybeComputeNeg :: Ord a => Formula a -> PGSetMonad a (CNF (ExtendedAtom a)) -> PGSetMonad a (CNF (ExtendedAtom a))
+maybeComputePos, maybeComputeNeg :: Formula -> PGSetMonad CNF -> PGSetMonad CNF
 maybeComputePos = maybeCompute_ getPSet setPSet
 maybeComputeNeg = maybeCompute_ getNSet setNSet
 
-transformPlus,transformMinus :: (Ord a) => (Formula a) -> PGSetMonad a (CNF (ExtendedAtom a))
+transformPlus,transformMinus :: Formula -> PGSetMonad CNF
 transformPlus fm@(a `And` b) =
   maybeComputePos fm $
   do cnfA <- transformPlus a
@@ -111,7 +115,7 @@ transformPlus fm@(a `Imp` b) =
      return $ toCnf [[nlit fm, nlit a, lit b]] +&+ cnfA +&+ cnfB
      -- bigAnd [lvar fm `Imp` (lvar a `Imp` lvar b), cnfA, cnfB]
 transformPlus fm@(Neg a)       = maybeComputePos fm $ transformMinus a
-transformPlus fm@(Atom _)       = maybeComputePos fm $ return Cnf.top
+transformPlus fm@(A _)       = maybeComputePos fm $ return Cnf.top
 transformPlus Top              = maybeComputePos Top $ return Cnf.top
 transformPlus Bot              = maybeComputePos Bot $ return Cnf.top
 
@@ -144,16 +148,16 @@ transformMinus fm@(a `Imp` b) =
 -- bigAnd [lvar (lvar a `Imp` lvar b) `Imp` fm, cnfA, cnfB]
 
 transformMinus fm@(Neg a)     = maybeComputeNeg fm $ transformPlus a
-transformMinus fm@(Atom _)     = maybeComputeNeg fm $ return Cnf.top
+transformMinus fm@(A _)     = maybeComputeNeg fm $ return Cnf.top
 transformMinus Top            = maybeComputeNeg Top $ return Cnf.top
 transformMinus Bot            = maybeComputeNeg Bot $ return Cnf.top
 
-transformList :: Ord a => [Formula a] -> PGSetMonad a (CNF (ExtendedAtom a))
+transformList :: [Formula] -> PGSetMonad CNF
 transformList fms = liftM (foldr (+&+) Cnf.top) (mapM transform_ fms)
   where transform_ fm = do cnf <- transformPlus fm
                            return $ toCnf [[lit fm]] +&+ cnf
 
-transform :: Ord a => Formula a -> CNF (ExtendedAtom a)
+transform :: Formula -> CNF
 transform fm = State.evalState (transformList $ splitAnd fm) St{posSet = Set.empty, negSet = Set.empty}
   where splitAnd (a `And` b) = splitAnd a ++ splitAnd b
         splitAnd fm'          = [fm']
@@ -167,7 +171,7 @@ transform fm = State.evalState (transformList $ splitAnd fm) St{posSet = Set.emp
 -- simplify (Neg  ((Neg a) `Or` (Neg b)))   = a `And` b
 -- simplify _ = undefined  -- TODO finish
 
-baseAssignment :: Ord a => Assign (ExtendedAtom a) -> Assign a
-baseAssignment = fromMap . Map.foldWithKey f empty . toMap
-  where f (V x) e = Map.insert x e 
-        f _ _     = id
+-- baseAssignment :: Assign (ExtendedAtom Atm) -> Assign
+-- baseAssignment = fromMap . Map.foldWithKey f empty . toMap
+--   where f (V x) e = Map.insert x e 
+--         f _ _     = id

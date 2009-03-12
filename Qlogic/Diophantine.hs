@@ -19,9 +19,10 @@ data DioMono a = DioMono Int [VPower a]
 data VPower a = VPower a Int
 data DioAtom a = Grt (DioPoly a) (DioPoly a)
                | Equ (DioPoly a) (DioPoly a)
-type DioFormula a = Formula (DioAtom a)
 
-toFormulaGen :: (Int -> DioPoly a -> NatFormula (PLVec a)) -> Int -> DioFormula a -> Formula (PLVec a)
+type DioFormula a = Formula 
+
+toFormulaGen :: (Int -> DioPoly a -> NatFormula (PLVec a)) -> Int -> DioFormula a -> Formula
 toFormulaGen f n (Atom (p `Grt` q)) = truncBots (f n p) .>. truncBots (f n q)
 toFormulaGen f n (Atom (p `Equ` q)) = truncBots (f n p) .=. truncBots (f n q)
 toFormulaGen f n (p `And` q)        = toFormulaGen f n p &&& toFormulaGen f n q

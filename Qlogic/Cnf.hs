@@ -22,62 +22,62 @@ module Qlogic.Cnf
 where
 import Prelude hiding (foldr)
 import qualified Data.List as List
-import Qlogic.Formula (Formula(..))
+import Qlogic.Formula (Formula(..), Atom)
 
-data Literal a = PosLit a -- ^ positive literal
-               | NegLit a -- ^ negative literal
-                 deriving (Show, Eq)
+data Literal = PosLit Atom -- ^ positive literal
+             | NegLit Atom -- ^ negative literal
+               deriving (Show, Eq, Ord)
 
 -- | a clause is a sequence of 'Literal's
-newtype Clause a = Clause {clauseToList :: [Literal a]}
+newtype Clause = Clause {clauseToList :: [Literal]}
 
-emptyClause :: Clause a
+emptyClause :: Clause
 -- ^ the empty 'Clause'
 emptyClause = clause []
 
-clause :: [Literal a] -> Clause a
+clause :: [Literal] -> Clause
 clause = Clause 
 
 -- | a Conjunctive Normal Form is a sequence of 'Clause's
-data CNF a = Empty
-           | Singleton (Clause a)
-           | (CNF a) :&: (CNF a)
+data CNF = Empty
+           | Singleton Clause
+           | CNF :&: CNF
 
-isContradiction :: CNF a -> Bool
+isContradiction :: CNF -> Bool
 isContradiction (Singleton (Clause [])) = True
 isContradiction _                       = False
 
-top :: CNF a
+top :: CNF
 -- ^ the empty set of clauses
 top = Empty
 
-bot :: CNF a
+bot :: CNF
 -- ^ the singleton set containing the empty clause
 bot = Singleton emptyClause
 
-singleton :: Clause a -> CNF a
+singleton :: Clause -> CNF
 -- ^ the singleton set containing the empty clause
 singleton = Singleton
 
-fromList :: [Clause a] -> CNF a
+fromList :: [Clause] -> CNF
 -- ^ translate a 'List' of 'Clause's to a 'CNF'
 fromList []     = Empty
 fromList [a]    = Singleton a
 fromList (a:as) = List.foldr (:&:) (Singleton a) $ map Singleton as
 
-(+&+) :: CNF a -> CNF a -> CNF a
+(+&+) :: CNF -> CNF -> CNF
 -- ^ concatenation of two 'CNF's
 Empty +&+ b     = b
 a     +&+ Empty = a
 a     +&+ b     = a :&: b
 
-foldr :: (Clause a -> b -> b) -> b -> CNF a -> b 
+foldr :: (Clause -> b -> b) -> b -> CNF -> b 
 -- ^ folding over 'CNF's
 foldr _ b Empty           = b
 foldr f b (Singleton a)   = f a b
 foldr f b (cnf1 :&: cnf2) = foldr f (foldr f b cnf2) cnf1
 
-fromFormula :: Formula a -> CNF a
+fromFormula :: Formula -> CNF
 -- ^ translate a 'Formula' into a 'CNF' with the possibly exponential textbook algorithm
 fromFormula = cnf . nnf . implFree
 
@@ -103,8 +103,8 @@ cnf Top                = top
 cnf Bot                = bot
 cnf (a `And` b)        = cnf a +&+ cnf b
 cnf (a `Or` b)         = distr (cnf a) (cnf b)
-cnf (Neg (Atom a))     = singleton $ clause [NegLit a]
-cnf (Atom a)           = singleton $ clause [PosLit a]
+cnf (Neg (A a))     = singleton $ clause [NegLit a]
+cnf (A a)           = singleton $ clause [PosLit a]
 
 distr Empty _                     = Empty
 distr _ Empty                     = Empty

@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Qlogic.NatSat
   (
   -- * Types
@@ -25,27 +27,30 @@ import qualified Qlogic.Assign as A
 import qualified Qlogic.Tseitin as T
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
-import Data.List (nub)
 import Foreign.Marshal.Utils (fromBool)
+import Data.Typeable
 
-type NatFormula a = [Formula a]
+type NatFormula = [Formula]
 data PLVec a = PLVec a Int
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Typeable)
+
+instance (Eq a, Ord a, Show a, Typeable a) => AtomClass (PLVec a)
+
 type NatAssign a = Map.Map a Int
 
-natToFormula :: Int -> NatFormula a
+natToFormula :: Int -> NatFormula
 -- ^ transforms a natural number into a list of Top/Bot values
 natToFormula n | n == 0    = [Bot]
                | n == 1    = [Top]
                | n < 0     = error "Only natural numbers allowed in argument!"
                | otherwise = natToFormula (n `div` 2) ++ natToFormula (n `mod` 2)
 
-padBots :: Int -> NatFormula a -> NatFormula a
+padBots :: Int -> NatFormula -> NatFormula
 padBots n | n == 0    = id
           | n > 0     = (:) Bot . padBots (n - 1)
           | otherwise = error "Only natural numbers allowed in argument!"
 
-truncBots :: NatFormula a -> NatFormula a
+truncBots :: NatFormula -> NatFormula
 -- ^ removes leading Bottoms from a list of propositional formulas
 --   however, the last Bot in a list consisting only of Bots is never removed
 truncBots []       = []
@@ -53,7 +58,7 @@ truncBots f@[n]    = f
 truncBots (Bot:ps) = truncBots ps
 truncBots f@(_:_)  = f
 
-truncTo :: Int -> NatFormula a -> NatFormula a
+truncTo :: Int -> NatFormula -> NatFormula
 -- ^ If the given list of propositional formulas is longer than n, its length is reduced
 --   to n by chopping off the first elements
 truncTo _ []                         = []
@@ -70,7 +75,7 @@ bitsToNat :: Int -> Int
 bitsToNat n = (2 ^ n) - 1
 
 
-(.+.) :: NatFormula a -> NatFormula a -> NatFormula a
+(.+.) :: NatFormula -> NatFormula -> NatFormula
 -- ^ performs addition of natural numbers in the representation as a list
 --   of propositional formulas
 [] .+. []                  = []
@@ -84,12 +89,12 @@ ps .+. qs | lengthdiff > 0 = padBots lengthdiff ps .+. qs
         q          = head qs
         r          = head rs
 
-bigPlus :: [NatFormula a] -> NatFormula a
+bigPlus :: [NatFormula] -> NatFormula
 -- ^ calculates the sum of a list of natural numbers in their representation
 --   as lists of propositional formulas
 bigPlus = foldr (.+.) [Bot]
 
-(.*.) :: NatFormula a -> NatFormula a -> NatFormula a
+(.*.) :: NatFormula -> NatFormula -> NatFormula
 -- ^ performs multiplication of natural numbers in the representation as a list
 --   of propositional formulas
 ps .*. []     = []
@@ -98,12 +103,12 @@ ps .*. (q:qs) = r1 .+. r2
   where r1 = map (&&& q) ps ++ padBots (length qs) []
         r2 = ps .*. qs
 
-bigTimes :: [NatFormula a] -> NatFormula a
+bigTimes :: [NatFormula] -> NatFormula
 -- ^ calculates the product of a list of natural numbers in their representation
 --   as lists of propositional formulas
 bigTimes = foldr (.*.) [Top]
 
-(.>.) :: NatFormula a -> NatFormula a -> Formula a
+(.>.) :: NatFormula -> NatFormula -> Formula
 -- ^ performs "greater than" comparisons of natural numbers in the representation
 --   as a list of propositional formulas
 [] .>. []                  = Bot
@@ -115,7 +120,7 @@ ps .>. qs | lengthdiff > 0 = padBots lengthdiff ps .>. qs
          p                 = head ps
          q                 = head qs
 
-(.=.) :: NatFormula a -> NatFormula a -> Formula a
+(.=.) :: NatFormula -> NatFormula -> Formula
 -- ^ performs equality comparisons of natural numbers in the representation
 --   as a list of propositional formulas
 [] .=. []                  = Top
@@ -126,25 +131,37 @@ ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
    where lengthdiff        = length qs - length ps
 
 -- creates a variable with enough bits to represent n
-varToNat :: Int -> a -> NatFormula (PLVec a)
+varToNat :: (Ord a, Show a, Typeable a) => Int -> a -> NatFormula
 -- ^ creates a "natural number variable" encoded by a list of
 --   propositional variables. The length of the list is chosen
 --   to be exactly enough in order to represent n
 varToNat = nBitVar . natToBits
 
-nBitVar :: Int -> a -> NatFormula (PLVec a)
-nBitVar n v | n > 0     = nBitVar (n - 1) v ++ [Atom (PLVec v n)]
+nBitVar :: (Ord a, Show a, Typeable a) => Int -> a -> NatFormula
+nBitVar n v | n > 0     = nBitVar (n - 1) v ++ [atom (PLVec v n)]
             | otherwise = []
 
-baseFromVec :: PLVec a -> a
+baseFromVec :: (Ord a, Show a, Typeable a) => PLVec a -> a
 baseFromVec (PLVec x _) = x
 
-natAssignment :: Ord a => Int -> A.Assign (PLVec a) -> NatAssign a
+natAssignment :: (Ord a, Typeable a) => Int -> A.Assign -> NatAssign a
+natAssignment bits = Map.foldWithKey f Map.empty
+  where f _ False natAss = natAss
+        f (Atom k) True natAss = case cast k of 
+                                   Just (PLVec var i) -> Map.alter (modifyBit i) var natAss
+                                   Nothing            -> natAss
+        modifyBit i (Just n) = Just $ n + 2^(bits - i)
+        modifyBit i Nothing = Just $ 2^(bits - i)
 -- ^ converts a propositional assignment into an assignment for constraints
 --   over natural numbers encoded by propositional formulas
-natAssignment n = convMap [1..n] . A.toMap
-   where convMap ns ass = (Map.fromList . map ((`convKey` ns) . baseFromVec) . Map.keys . firstIndices) ass
-                       where firstIndices   = Map.filterWithKey (\(PLVec _ x) _ -> x == 1)
-                             convKey k ns = (k, convKey' k ns)
-                             convKey' k   = bListToNat . map (fromJust . (`Map.lookup` ass) . PLVec k)
-                             bListToNat   = foldl (\x y -> 2 * x + y) 0 . map fromBool
+-- natAssignment n = convMap [1..n] . A.toMap
+--    where convMap ns ass = (Map.fromList . map ((`convKey` ns) . baseFromVec) . Map.keys . firstIndices) ass
+--                        where firstIndices   = Map.filterWithKey (\(PLVec _ x) _ -> x == 1)
+--                              convKey k ns = (k, convKey' k ns)
+--                              convKey' k   = bListToNat . map (fromJust . (`Map.lookup` ass) . PLVec k)
+--                              bListToNat   = foldl (\x y -> 2 * x + y) 0 . map fromBool
+
+
+--                              ass' = Map.foldWithKey (\ (Atom k) v a -> case cast k :: Maybe PLVec of 
+--                                                                         Just k' -> Map.insert k' v a
+--                                                                         Nothing -> a) ass A.empty

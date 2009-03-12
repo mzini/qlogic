@@ -21,51 +21,48 @@ import qualified Qlogic.Assign as Assign
 import Qlogic.Assign ((|->))
 import qualified Qlogic.Tseitin as Tseitin
 
-data Answer a = Satisfiable (Assign.Assign a)
+data Answer = Satisfiable Assign.Assign
             | Unsatisfiable
 
-instance Show a => Show (Answer a) where 
+instance Show Answer where 
     show (Satisfiable a) = "Satisfiable:" ++ show a
     show Unsatisfiable   = "Unsatisfiable"
 
-type AtmMap a = Map.Map a Sat.Lit
+type AtomMap = Map.Map Atom Sat.Lit
 
-type MiniSat r a = State.StateT (AtmMap a) Sat.S r
+type MiniSat r = State.StateT AtomMap Sat.S r
 
-newLit :: MiniSat Sat.Lit r 
+newLit :: MiniSat Sat.Lit 
 newLit = lift Sat.newLit
 
-literal :: (Ord a) => a -> MiniSat Sat.Lit a
+literal :: Atom -> MiniSat Sat.Lit
 literal a = do literals <- State.get 
                maybe (newLit >>= \ lit -> State.withStateT (Map.insert a lit) $ return lit)
                      return $ Map.lookup a literals
 
-extractAssign :: Ord a => MiniSat (Assign.Assign a) a
+extractAssign :: MiniSat Assign.Assign
 extractAssign = State.get >>= Map.foldWithKey f (return Assign.empty)
     where f k l m = do assign <- m
                        v <- lift $ Sat.getModelValue l
                        return $ Assign.add [k |-> v] assign
 
-run :: MiniSat r a -> IO r
+run :: MiniSat r -> IO r
 run m = Sat.run $ State.evalStateT m Map.empty
 
-solve :: (Ord a)  => Formula a -> IO (Answer a)
-solve fm = run $ do ans <- solve_ $ Tseitin.transform fm
-                    return $ base ans
-                      where base Unsatisfiable   = Unsatisfiable
-                            base (Satisfiable x) = Satisfiable (Tseitin.baseAssignment x)
+solve :: Formula -> IO Answer
+solve fm = run $ solve_ $ Tseitin.transform fm
 
-solveCnf :: (Ord a) => Cnf.CNF a -> IO (Answer a)
+solveCnf :: Cnf.CNF -> IO Answer
 solveCnf = run . solve_
 
-solve_ :: (Ord a) => Cnf.CNF a -> MiniSat (Answer a) a
+solve_ :: Cnf.CNF -> MiniSat Answer
 solve_ fm = do addClauses fm
                isSat <- lift $ Sat.solve []
                case isSat of 
                  True -> Satisfiable `liftM` extractAssign
                  False -> return Unsatisfiable
 
-addClauses :: (Ord a) => Cnf.CNF a -> MiniSat () a
+addClauses :: Cnf.CNF -> MiniSat ()
 addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
                | otherwise               = Cnf.foldr f (return ()) cnf
   where f clause m = do mlits <- mapM mkLit $ Cnf.clauseToList clause
