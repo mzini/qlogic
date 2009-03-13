@@ -55,7 +55,6 @@ executable qlogic-test
  hs-source-dirs:    .
                     Folkung/Haskell
  includes:          Folkung/instantiate/Wrapper.h
- ghc-options:       -fhpc
  extra-lib-dirs:    Folkung/instantiate
                     Folkung/minisat/mtl
                     Folkung/minisat/current-base

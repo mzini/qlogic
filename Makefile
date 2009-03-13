@@ -9,7 +9,7 @@ MINISAT_INST=Folkung/instantiate
 
 all: build doc_haskell
 
-build: build_minisat build_haskell
+build: prepare build_minisat build_haskell
 
 install: install_minisat install_haskell
 
@@ -18,7 +18,7 @@ uninstall: uninstall_minisat unregister_haskell
 clean: clean_minisat clean_haskell
 
 prepare:
-	tar xvzf $(FOLKUNGTGZ)
+	[[-d $(FOLKUNG)]] || tar xvzf $(FOLKUNGTGZ)
 
 .PHONY: clean
 
@@ -27,6 +27,7 @@ prepare:
 ######################################################################
 
 install_minisat: build_minisat
+	mkdir -p $(PREFIX)/lib
 	install -m 644 $(MINISAT)/libminisat.a $(PREFIX)/lib
 	install -m 644 $(MINISAT_INST)/libinstantiate.a $(PREFIX)/lib
 
