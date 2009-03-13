@@ -6,16 +6,19 @@ import Qlogic.MiniSat hiding (run)
 import Qlogic.Cnf
 import System.IO.Unsafe (unsafePerformIO)
 import Qlogic.Formula
+import Qlogic.Assign
 import Control.Monad (liftM, liftM2)
 
+instance AtomClass Int
+
 -- arbitrary formulas
-instance Arbitrary a => Arbitrary (Formula a) where
+instance Arbitrary Formula where
   arbitrary = sized arbFm
   coarbitrary = undefined          
 
 arbFm 0 = frequency 
           [ 
-           (1,liftM Atom arbitrary)
+           (1,liftM atom (arbitrary::Gen Int))
           , (1,return Top)
           , (1,return Bot)
           ]
@@ -31,19 +34,19 @@ arbFm m = frequency
         m' = m `div` 2
 
 -- sat properties
-prop_cnf_equisat :: Formula Int -> Bool
+prop_cnf_equisat :: Formula -> Bool
 prop_cnf_equisat f = (unsafePerformIO $ solve f) `satEq` (unsafePerformIO $ solveCnf $ fromFormula f)
   where satEq Unsatisfiable Unsatisfiable     = True
         satEq (Satisfiable _) (Satisfiable _) = True
         satEq _ _                             = False
 
-prop_simplify_equisat :: Formula Int -> Bool
+prop_simplify_equisat :: Formula -> Bool
 prop_simplify_equisat f = (unsafePerformIO $ solve f) `satEq` (unsafePerformIO $ solve $ simplify f)
   where satEq Unsatisfiable Unsatisfiable     = True
         satEq (Satisfiable _) (Satisfiable _) = True
         satEq _ _                             = False
 
-prop_solve_eval :: Formula Int -> Property
+prop_solve_eval :: Formula -> Property
 prop_solve_eval fm = isSat res ==> eval fm (ass res)
   where res = unsafePerformIO $ solve fm
         isSat (Satisfiable _ ) = True

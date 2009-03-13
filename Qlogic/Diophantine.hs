@@ -1,3 +1,7 @@
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Qlogic.Diophantine
   (
   -- * Types
@@ -13,38 +17,62 @@ module Qlogic.Diophantine
 
 import Qlogic.NatSat
 import Qlogic.Formula
+import Data.Typeable
 
-type DioPoly a = [DioMono a]
-data DioMono a = DioMono Int [VPower a]
-data VPower a = VPower a Int
-data DioAtom a = Grt (DioPoly a) (DioPoly a)
-               | Equ (DioPoly a) (DioPoly a)
 
-type DioFormula a = Formula 
+data VPower  = forall a. (DioAtomClass a) => VPower a Int deriving Typeable
+data DioMono = DioMono Int [VPower] 
+               deriving (Eq, Ord, Show, Typeable)
+type DioPoly = [DioMono]                
+data DioAtom = Grt DioPoly DioPoly
+             | Equ DioPoly DioPoly 
+               deriving (Eq, Ord, Show, Typeable)
 
-toFormulaGen :: (Int -> DioPoly a -> NatFormula (PLVec a)) -> Int -> DioFormula a -> Formula
-toFormulaGen f n (Atom (p `Grt` q)) = truncBots (f n p) .>. truncBots (f n q)
-toFormulaGen f n (Atom (p `Equ` q)) = truncBots (f n p) .=. truncBots (f n q)
+class AtomClass a => DioAtomClass a
+instance AtomClass DioAtom
+type DioFormula = Formula 
+
+instance Show VPower where 
+  show (VPower a i) = "VPower " ++ show a ++ " " ++ show i
+
+instance Eq VPower where 
+  VPower (a :: a) ai == VPower (b :: b) bi = 
+    ai == bi && typeOf a == typeOf b && ((cast a :: Maybe a) == (cast b :: Maybe a))
+
+instance Ord VPower where 
+  VPower (a :: a) ai >= VPower (b :: b) bi | ai > bi  = True
+                                          | expeq && show ta > show tb = True
+                                          | expeq && show ta == show tb = ((cast a :: Maybe a) >= (cast b :: Maybe a))
+                                          | otherwise = False
+                                          where ta = typeOf a
+                                                tb = typeOf b
+                                                expeq = ai == bi
+
+toFormulaGen :: (Int -> DioPoly -> NatFormula) -> Int -> DioFormula -> Formula
+toFormulaGen f n (A (Atom a))    = case (cast a :: Maybe DioAtom) of 
+                                     Just (p `Grt` q)  -> truncBots (f n p) .>. truncBots (f n q)
+                                     Just (p `Equ` q)  -> truncBots (f n p) .=. truncBots (f n q)
+                                     Nothing           -> (A (Atom a))
 toFormulaGen f n (p `And` q)        = toFormulaGen f n p &&& toFormulaGen f n q
 toFormulaGen f n (p `Or` q)         = toFormulaGen f n p ||| toFormulaGen f n q
 toFormulaGen f n (p `Imp` q)        = toFormulaGen f n p --> toFormulaGen f n q
 toFormulaGen f n (p `Iff` q)        = toFormulaGen f n p <-> toFormulaGen f n q
 toFormulaGen f n (Neg p)            = neg $ toFormulaGen f n p
-toFormulaGen f n Top                = Top
-toFormulaGen f n Bot                = Bot
+toFormulaGen _ _ Top                = Top
+toFormulaGen _ _ Bot                = Bot
 
-toFormulaSimp :: Int -> DioFormula a -> Formula (PLVec a)
+toFormulaSimp :: Int -> DioFormula -> Formula
 -- ^ translates a Diophantine constraint into a propositional formula,
 --   where variables are instantiated by values between 0 and n.
 toFormulaSimp = toFormulaGen polyToNatSimp
 
-polyToNatSimp :: Int -> DioPoly a -> NatFormula (PLVec a)
+polyToNatSimp :: Int -> DioPoly -> NatFormula
 polyToNatSimp n = truncBots . bigPlus . map (monoToNatSimp n)
 
-monoToNatSimp :: Int -> DioMono a -> NatFormula (PLVec a)
+monoToNatSimp :: Int -> DioMono -> NatFormula
 monoToNatSimp n (DioMono m vp) = truncBots $ natToFormula m .*. (bigTimes . map (powerToNatSimp n)) vp
 
-powerToNatSimp :: Int -> VPower a -> NatFormula (PLVec a)
+powerToNatSimp :: Int -> VPower-> NatFormula
 powerToNatSimp n (VPower v m) | m > 0     = varToNat n v .*. powerToNatSimp n (VPower v (m - 1))
                               | otherwise = [Top]
 
@@ -52,7 +80,7 @@ powerToNatSimp n (VPower v m) | m > 0     = varToNat n v .*. powerToNatSimp n (V
 -- prunes all "numbers" to their maximum length based on
 -- the assumption that the value of all variables is at most n
 -- FIXME: AS: [v]<=n muss noch erzwungen werden
-toFormula :: Int -> DioFormula a -> Formula (PLVec a)
+toFormula :: Int -> DioFormula -> Formula
 -- ^ translates a Diophantine constraint into a propositional formula,
 --   where variables are instantiated by values between 0 and n.
 --   this function tracks the maximum value of all subformulas.
@@ -60,17 +88,17 @@ toFormula :: Int -> DioFormula a -> Formula (PLVec a)
 --   maximum values
 toFormula = toFormulaGen polyToNat
 
-polyToNat :: Int -> DioPoly a -> NatFormula  (PLVec a)
+polyToNat :: Int -> DioPoly -> NatFormula
 polyToNat n xs = (truncBots . truncTo (natToBits newmax) . bigPlus . map fst) subresults
   where subresults = map (monoToNat n) xs
         newmax     = (sum . map snd) subresults
 
-monoToNat :: Int -> DioMono a -> (NatFormula (PLVec a), Int)
+monoToNat :: Int -> DioMono -> (NatFormula, Int)
 monoToNat n (DioMono m vp) = (newformula powers, newmax)
   where newformula = truncBots . truncTo (natToBits newmax) .  ((natToFormula m) .*.) . bigTimes . map fst
         powers     = map (powerToNat n) vp
         newmax     = m * (product . map snd) powers
 
-powerToNat :: Int -> VPower a -> (NatFormula (PLVec a), Int)
+powerToNat :: Int -> VPower -> (NatFormula, Int)
 powerToNat n (VPower v m) | m > 0     = (varToNat n v .*. powerToNatSimp n (VPower v (m - 1)), n ^ m)
                           | otherwise = ([Top], 1)

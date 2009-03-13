@@ -24,10 +24,7 @@ module Qlogic.NatSat
 
 import Qlogic.Formula
 import qualified Qlogic.Assign as A
-import qualified Qlogic.Tseitin as T
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
-import Foreign.Marshal.Utils (fromBool)
 import Data.Typeable
 
 type NatFormula = [Formula]
@@ -54,7 +51,7 @@ truncBots :: NatFormula -> NatFormula
 -- ^ removes leading Bottoms from a list of propositional formulas
 --   however, the last Bot in a list consisting only of Bots is never removed
 truncBots []       = []
-truncBots f@[n]    = f
+truncBots f@[_]    = f
 truncBots (Bot:ps) = truncBots ps
 truncBots f@(_:_)  = f
 
@@ -62,7 +59,7 @@ truncTo :: Int -> NatFormula -> NatFormula
 -- ^ If the given list of propositional formulas is longer than n, its length is reduced
 --   to n by chopping off the first elements
 truncTo _ []                         = []
-truncTo n qs@(p:ps) | length qs <= n = qs
+truncTo n qs@(_:ps) | length qs <= n = qs
                     | otherwise      = truncTo n ps
 
 natToBits :: Int -> Int
@@ -97,7 +94,7 @@ bigPlus = foldr (.+.) [Bot]
 (.*.) :: NatFormula -> NatFormula -> NatFormula
 -- ^ performs multiplication of natural numbers in the representation as a list
 --   of propositional formulas
-ps .*. []     = []
+_  .*. []     = []
 ps .*. [q]    = map (&&& q) ps
 ps .*. (q:qs) = r1 .+. r2
   where r1 = map (&&& q) ps ++ padBots (length qs) []
@@ -146,22 +143,9 @@ baseFromVec (PLVec x _) = x
 
 natAssignment :: (Ord a, Typeable a) => Int -> A.Assign -> NatAssign a
 natAssignment bits = Map.foldWithKey f Map.empty
-  where f _ False natAss = natAss
-        f (Atom k) True natAss = case cast k of 
-                                   Just (PLVec var i) -> Map.alter (modifyBit i) var natAss
-                                   Nothing            -> natAss
+  where f _        False natAss = natAss
+        f (Atom k) True  natAss = case cast k of 
+                                    Just (PLVec var i) -> Map.alter (modifyBit i) var natAss
+                                    Nothing            -> natAss
         modifyBit i (Just n) = Just $ n + 2^(bits - i)
-        modifyBit i Nothing = Just $ 2^(bits - i)
--- ^ converts a propositional assignment into an assignment for constraints
---   over natural numbers encoded by propositional formulas
--- natAssignment n = convMap [1..n] . A.toMap
---    where convMap ns ass = (Map.fromList . map ((`convKey` ns) . baseFromVec) . Map.keys . firstIndices) ass
---                        where firstIndices   = Map.filterWithKey (\(PLVec _ x) _ -> x == 1)
---                              convKey k ns = (k, convKey' k ns)
---                              convKey' k   = bListToNat . map (fromJust . (`Map.lookup` ass) . PLVec k)
---                              bListToNat   = foldl (\x y -> 2 * x + y) 0 . map fromBool
-
-
---                              ass' = Map.foldWithKey (\ (Atom k) v a -> case cast k :: Maybe PLVec of 
---                                                                         Just k' -> Map.insert k' v a
---                                                                         Nothing -> a) ass A.empty
+        modifyBit i Nothing  = Just $ 2^(bits - i)

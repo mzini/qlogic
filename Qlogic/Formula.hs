@@ -1,6 +1,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Qlogic.Formula 
   (-- * Types
@@ -31,6 +33,7 @@ import Data.Typeable
 import qualified Data.Maybe as Maybe
 
 class (Eq a, Ord a, Show a, Typeable a) => AtomClass a 
+
 data Atom = forall a. (AtomClass a) => Atom a
 
 instance Eq Atom where
@@ -43,7 +46,7 @@ instance Ord Atom where
          tb = typeOf b
 
 instance Show Atom where
-  show (Atom a) = "Atom " ++ show a
+  show (Atom a) = "Atom " ++ show  a
 
 data Formula = A Atom
              | And Formula Formula
@@ -53,8 +56,6 @@ data Formula = A Atom
              | Neg Formula
              | Top 
              | Bot deriving (Eq, Ord, Typeable, Show)
-
-
 
 simplify :: Formula -> Formula
 -- ^ performs basic simplification of formulas
