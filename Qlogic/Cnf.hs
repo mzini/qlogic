@@ -15,7 +15,7 @@ module Qlogic.Cnf
   , singleton
   , fromList
   , (+&+)
-  , foldr
+  , fold
   , isContradiction
   , fromFormula
   ) 
@@ -71,11 +71,11 @@ Empty +&+ b     = b
 a     +&+ Empty = a
 a     +&+ b     = a :&: b
 
-foldr :: (Clause -> b -> b) -> b -> CNF -> b 
+fold :: (Clause -> b -> b) -> b -> CNF -> b 
 -- ^ folding over 'CNF's
-foldr _ b Empty           = b
-foldr f b (Singleton a)   = f a b
-foldr f b (cnf1 :&: cnf2) = foldr f (foldr f b cnf2) cnf1
+fold _ b Empty           = b
+fold f b (Singleton a)   = f a b
+fold f b (cnf1 :&: cnf2) = fold f (fold f b cnf2) cnf1
 
 fromFormula :: Formula -> CNF
 -- ^ translate a 'Formula' into a 'CNF' with the possibly exponential textbook algorithm

@@ -6,6 +6,7 @@ module Qlogic.NatSat
   NatFormula
   , PLVec
   , NatAssign
+  , Size(..)
   -- * Operations
   , natToFormula
   , truncBots
@@ -18,7 +19,7 @@ module Qlogic.NatSat
   , bigTimes
   , (.>.)
   , (.=.)
-  , varToNat
+  , natAtom
   , natAssignment
   ) where
 
@@ -26,6 +27,25 @@ import Qlogic.Formula
 import qualified Qlogic.Assign as A
 import qualified Data.Map as Map
 import Data.Typeable
+
+data Size = Bits Int
+          | Bound Int
+
+natToBits :: Int -> Int
+-- ^ calculates the necessary length of a list of Top/Bot values for representing
+--   the given natural number
+natToBits n | n <= 1    = 1
+            | otherwise = (succ . natToBits . (`div` 2)) n
+
+bitsToNat :: Int -> Int
+bitsToNat n = (2 ^ n) - 1
+
+bits (Bits n)  = n
+bits (Bound n) = bitsToNat n
+
+bound (Bits n) = natToBits n
+bound (Bound n) = n
+
 
 type NatFormula = [Formula]
 data PLVec a = PLVec a Int
@@ -61,16 +81,6 @@ truncTo :: Int -> NatFormula -> NatFormula
 truncTo _ []                         = []
 truncTo n qs@(_:ps) | length qs <= n = qs
                     | otherwise      = truncTo n ps
-
-natToBits :: Int -> Int
--- ^ calculates the necessary length of a list of Top/Bot values for representing
---   the given natural number
-natToBits n | n <= 1    = 1
-            | otherwise = (succ . natToBits . (`div` 2)) n
-
-bitsToNat :: Int -> Int
-bitsToNat n = (2 ^ n) - 1
-
 
 (.+.) :: NatFormula -> NatFormula -> NatFormula
 -- ^ performs addition of natural numbers in the representation as a list
@@ -128,11 +138,11 @@ ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
    where lengthdiff        = length qs - length ps
 
 -- creates a variable with enough bits to represent n
-varToNat :: (Ord a, Show a, Typeable a) => Int -> a -> NatFormula
+natAtom :: (Ord a, Show a, Typeable a) => Size -> a -> NatFormula
 -- ^ creates a "natural number variable" encoded by a list of
 --   propositional variables. The length of the list is chosen
 --   to be exactly enough in order to represent n
-varToNat = nBitVar . natToBits
+natAtom size a = nBitVar (bits size) a
 
 nBitVar :: (Ord a, Show a, Typeable a) => Int -> a -> NatFormula
 nBitVar n v | n > 0     = nBitVar (n - 1) v ++ [atom (PLVec v n)]
@@ -141,11 +151,12 @@ nBitVar n v | n > 0     = nBitVar (n - 1) v ++ [atom (PLVec v n)]
 baseFromVec :: (Ord a, Show a, Typeable a) => PLVec a -> a
 baseFromVec (PLVec x _) = x
 
-natAssignment :: (Ord a, Typeable a) => Int -> A.Assign -> NatAssign a
-natAssignment bits = Map.foldWithKey f Map.empty
+natAssignment :: (Ord a, Typeable a) => Size -> A.Assign -> NatAssign a
+natAssignment s = Map.foldWithKey f Map.empty
   where f _        False natAss = natAss
         f (Atom k) True  natAss = case cast k of 
                                     Just (PLVec var i) -> Map.alter (modifyBit i) var natAss
                                     Nothing            -> natAss
-        modifyBit i (Just n) = Just $ n + 2^(bits - i)
-        modifyBit i Nothing  = Just $ 2^(bits - i)
+        modifyBit i (Just n) = Just $ n + 2^(bts - i)
+        modifyBit i Nothing  = Just $ 2^(bts - i)
+        bts = bits s

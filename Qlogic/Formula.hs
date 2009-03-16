@@ -22,6 +22,8 @@ module Qlogic.Formula
   , bot 
   , bigAnd
   , bigOr
+  , forall
+  , exist
   -- ** non-standard Boolean connectives 
   , oneOrThree
   , twoOrThree
@@ -29,12 +31,23 @@ module Qlogic.Formula
   ) 
 where
 import Data.Typeable
-
+import Data.Foldable
+import Prelude hiding (foldl, foldr)
 import qualified Data.Maybe as Maybe
 
-class (Eq a, Ord a, Show a, Typeable a) => AtomClass a 
+infixr 3 &&&
+infixr 2 |||
+infixr 1 -->
+infixr 1 <->
+
 
 data Atom = forall a. (AtomClass a) => Atom a
+
+class (Eq a, Ord a, Show a, Typeable a) => AtomClass a  where
+            toAtom :: a -> Atom 
+            toAtom = Atom 
+            fromAtom :: Atom -> Maybe a
+            fromAtom (Atom a) = cast a
 
 instance Eq Atom where
   Atom (a :: a) == Atom (b :: b) | typeOf a == typeOf b = (cast a :: Maybe a) == (cast b :: Maybe a)
@@ -113,11 +126,11 @@ top :: Formula
 -- ^ truth
 top = Top
 
-bigAnd :: [Formula] -> Formula
+bigAnd :: Foldable t => t Formula -> Formula
 -- ^ conjunction of multiple formulas
 bigAnd = foldr (&&&) Top
 
-bigOr :: [Formula] -> Formula
+bigOr :: Foldable t => t Formula -> Formula
 -- ^ disjunction of multiple formulas
 bigOr = foldr (|||) Bot
 
@@ -132,6 +145,12 @@ oneOrThree p q r = p <-> q <-> r
 twoOrThree :: Formula -> Formula -> Formula -> Formula
 -- ^ demands that exacly two or all three formulas hold.
 twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
+
+forall :: Foldable t => t a -> (a -> Formula) -> Formula
+forall xs f = foldr (\ x fm -> f x &&& fm) top xs 
+
+exist :: Foldable t => t a -> (a -> Formula) -> Formula
+exist xs f = foldr (\ x fm -> f x ||| fm) bot xs 
 
 -- utility functions
 

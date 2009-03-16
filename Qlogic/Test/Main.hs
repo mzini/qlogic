@@ -3,7 +3,7 @@ module Main where
 import Test.QuickCheck
 import Test.QuickCheck.Batch 
 import Qlogic.MiniSat hiding (run)
-import Qlogic.Cnf
+import Qlogic.Cnf hiding (top,bot)
 import System.IO.Unsafe (unsafePerformIO)
 import Qlogic.Formula
 import Qlogic.Assign
@@ -35,23 +35,25 @@ arbFm m = frequency
 
 -- sat properties
 prop_cnf_equisat :: Formula -> Bool
-prop_cnf_equisat f = (unsafePerformIO $ solve f) `satEq` (unsafePerformIO $ solveCnf $ fromFormula f)
-  where satEq Unsatisfiable Unsatisfiable     = True
-        satEq (Satisfiable _) (Satisfiable _) = True
+prop_cnf_equisat f = unsafePerformIO $ do f1 <- solve f
+                                          f2 <- solveCnf $ fromFormula f
+                                          return $  f1 `satEq` f2
+  where satEq Nothing Nothing     = True
+        satEq (Just _) (Just _) = True
         satEq _ _                             = False
 
 prop_simplify_equisat :: Formula -> Bool
 prop_simplify_equisat f = (unsafePerformIO $ solve f) `satEq` (unsafePerformIO $ solve $ simplify f)
-  where satEq Unsatisfiable Unsatisfiable     = True
-        satEq (Satisfiable _) (Satisfiable _) = True
+  where satEq Nothing Nothing     = True
+        satEq (Just _) (Just _) = True
         satEq _ _                             = False
 
 prop_solve_eval :: Formula -> Property
 prop_solve_eval fm = isSat res ==> eval fm (ass res)
   where res = unsafePerformIO $ solve fm
-        isSat (Satisfiable _ ) = True
+        isSat (Just _ ) = True
         isSat _                = False
-        ass (Satisfiable ass)  = ass
+        ass (Just ass)  = ass
 
 ----------------------------------------------------------------------
 -- main 
@@ -59,7 +61,14 @@ prop_solve_eval fm = isSat res ==> eval fm (ass res)
 options = TestOptions 
           { no_of_tests     = 1000
           , length_of_tests = 120 -- time limit in seconds
-          , debug_tests     = False}
+          , debug_tests     = True}
+
+instance AtomClass Char
+a = atom 'a'
+b = atom 'b'
+c = atom 'c'
+d = atom 'd'
+f = ((bot ||| bot) <->  neg top) &&& (b <-> top ||| neg top)
 
 main = runTests "SatSolving" options
        [

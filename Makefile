@@ -1,11 +1,10 @@
-SETUP_HS=./Setup.lhs
-PREFIX=/usr/local
+include .config 
+include ./template.mk
 
 FOLKUNG=Folkung
 FOLKUNGTGZ=folkung3.tar.gz
 MINISAT=$(FOLKUNG)/minisat/current-base
 MINISAT_INST=Folkung/instantiate
-
 
 all: build doc_haskell
 
@@ -42,5 +41,3 @@ build_minisat:
 clean_minisat:
 	make clean -C $(MINISAT)
 	make clean -C $(MINISAT_INST)
-
-include ./template.mk
