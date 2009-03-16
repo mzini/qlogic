@@ -6,6 +6,7 @@
 module Qlogic.MiniSat 
  ( solve
  , solveCnf
+ , Decoder(..)
  , MiniSat
  , addFormula
  , addClauses

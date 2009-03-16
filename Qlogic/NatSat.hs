@@ -13,6 +13,8 @@ module Qlogic.NatSat
   , truncTo
   , natToBits
   , bitsToNat
+  , bits
+  , bound
   , (.+.)
   , bigPlus
   , (.*.)
@@ -41,11 +43,10 @@ bitsToNat :: Int -> Int
 bitsToNat n = (2 ^ n) - 1
 
 bits (Bits n)  = n
-bits (Bound n) = bitsToNat n
+bits (Bound n) = natToBits n
 
-bound (Bits n) = natToBits n
+bound (Bits n) = bitsToNat n
 bound (Bound n) = n
-
 
 type NatFormula = [Formula]
 data PLVec a = PLVec a Int

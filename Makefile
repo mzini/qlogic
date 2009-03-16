@@ -6,9 +6,9 @@ FOLKUNGTGZ=folkung3.tar.gz
 MINISAT=$(FOLKUNG)/minisat/current-base
 MINISAT_INST=Folkung/instantiate
 
-all: build doc_haskell
+all: prepare build doc_haskell
 
-build: prepare build_minisat build_haskell
+build: build_minisat build_haskell
 
 install: install_minisat install_haskell
 
@@ -17,7 +17,7 @@ uninstall: uninstall_minisat unregister_haskell
 clean: clean_minisat clean_haskell
 
 prepare:
-	[[-d $(FOLKUNG)]] || tar xvzf $(FOLKUNGTGZ)
+	tar xvzf $(FOLKUNGTGZ)
 
 .PHONY: clean
 
