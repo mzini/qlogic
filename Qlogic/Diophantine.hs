@@ -18,8 +18,9 @@ module Qlogic.Diophantine
 import Qlogic.NatSat
 import Qlogic.Formula
 import Data.Typeable
+import qualified Data.Set as Set
 
-
+data DioVar  = forall a. (DioAtomClass a) => DioVar a
 data VPower  = forall a. (DioAtomClass a) => VPower a Int deriving Typeable
 data DioMono = DioMono Int [VPower] 
                deriving (Eq, Ord, Show, Typeable)
@@ -32,42 +33,70 @@ class AtomClass a => DioAtomClass a
 instance AtomClass DioAtom
 type DioFormula = Formula 
 
-instance Show VPower where 
+instance Show VPower where
   show (VPower a i) = "VPower " ++ show a ++ " " ++ show i
 
-instance Eq VPower where 
-  VPower (a :: a) ai == VPower (b :: b) bi = 
+instance Eq VPower where
+  VPower (a :: a) ai == VPower (b :: b) bi =
     ai == bi && typeOf a == typeOf b && ((cast a :: Maybe a) == (cast b :: Maybe a))
 
-instance Ord VPower where 
+instance Ord VPower where
   VPower (a :: a) ai >= VPower (b :: b) bi | ai > bi  = True
-                                          | expeq && show ta > show tb = True
-                                          | expeq && show ta == show tb = ((cast a :: Maybe a) >= (cast b :: Maybe a))
-                                          | otherwise = False
-                                          where ta = typeOf a
-                                                tb = typeOf b
-                                                expeq = ai == bi
+                                           | expeq && show ta > show tb = True
+                                           | expeq && show ta == show tb = ((cast a :: Maybe a) >= (cast b :: Maybe a))
+                                           | otherwise = False
+                                           where ta    = typeOf a
+                                                 tb    = typeOf b
+                                                 expeq = ai == bi
 
-toFormulaGen :: (Size -> DioPoly -> NatFormula) -> Size -> DioFormula -> Formula
-toFormulaGen f n (A (Atom a))    = case (cast a :: Maybe DioAtom) of 
-                                     Just (p `Grt` q)  -> truncBots (f n p) .>. truncBots (f n q)
-                                     Just (p `Equ` q)  -> truncBots (f n p) .=. truncBots (f n q)
-                                     Nothing           -> (A (Atom a))
-toFormulaGen f n (p `And` q)        = toFormulaGen f n p &&& toFormulaGen f n q
-toFormulaGen f n (p `Or` q)         = toFormulaGen f n p ||| toFormulaGen f n q
-toFormulaGen f n (p `Imp` q)        = toFormulaGen f n p --> toFormulaGen f n q
-toFormulaGen f n (p `Iff` q)        = toFormulaGen f n p <-> toFormulaGen f n q
-toFormulaGen f n (Neg p)            = neg $ toFormulaGen f n p
-toFormulaGen _ _ Top                = Top
-toFormulaGen _ _ Bot                = Bot
+instance Eq DioVar where
+  DioVar (a :: a) == DioVar (b :: b) =
+    typeOf a == typeOf b && ((cast a :: Maybe a) == (cast b :: Maybe a))
+
+instance Ord DioVar where
+  DioVar (a :: a) >= DioVar (b :: b) | show ta > show tb  = True
+                                     | show ta == show tb = ((cast a :: Maybe a) >= (cast b :: Maybe a))
+                                     | otherwise = False
+                                     where ta = typeOf a
+                                           tb = typeOf b
+
+toFormGen :: (Size -> DioPoly -> (NatFormula, Set.Set DioVar)) -> Size -> DioFormula -> (Formula, Set.Set DioVar)
+toFormGen f n (A (Atom a)) = case (cast a :: Maybe DioAtom) of
+                               Just (p `Grt` q) -> (truncBots (fst pres) .>. truncBots (fst qres), Set.union (snd pres) (snd qres))
+                                                   where pres = f n p
+                                                         qres = f n q
+                               Just (p `Equ` q) -> (truncBots (fst pres) .=. truncBots (fst qres), Set.union (snd pres) (snd qres))
+                                                   where pres = f n p
+                                                         qres = f n q
+                               Nothing          -> (A (Atom a), Set.empty)
+toFormGen f n (p `And` q)  = (fst pres &&& fst qres, Set.union (snd pres) (snd qres))
+                                                   where pres = toFormGen f n p
+                                                         qres = toFormGen f n q
+toFormGen f n (p `Or` q)   = (fst pres ||| fst qres, Set.union (snd pres) (snd qres))
+                                                   where pres = toFormGen f n p
+                                                         qres = toFormGen f n q
+toFormGen f n (p `Imp` q)  = (fst pres --> fst qres, Set.union (snd pres) (snd qres))
+                                                   where pres = toFormGen f n p
+                                                         qres = toFormGen f n q
+toFormGen f n (p `Iff` q)  = (fst pres <-> fst qres, Set.union (snd pres) (snd qres))
+                                                   where pres = toFormGen f n p
+                                                         qres = toFormGen f n q
+toFormGen f n (Neg p)      = (neg (fst pres), snd pres)
+                             where pres = toFormGen f n p
+toFormGen _ _ Top          = (Top, Set.empty)
+toFormGen _ _ Bot          = (Bot, Set.empty)
 
 toFormulaSimp :: Size -> DioFormula -> Formula
 -- ^ translates a Diophantine constraint into a propositional formula,
 --   where variables are instantiated by values between 0 and n.
-toFormulaSimp = toFormulaGen polyToNatSimp
+toFormulaSimp n = fst . toFormulaSimp' n
 
-polyToNatSimp :: Size -> DioPoly -> NatFormula
-polyToNatSimp n = truncBots . bigPlus . map (monoToNatSimp n)
+toFormulaSimp' :: Size -> DioFormula -> (Formula, Set.Set DioVar)
+toFormulaSimp' = toFormGen polyToNatSimp
+
+polyToNatSimp :: Size -> DioPoly -> (NatFormula, Set.Set DioVar)
+polyToNatSimp n = pairEmpty . truncBots . bigPlus . map (monoToNatSimp n)
+                  where pairEmpty x = (x, Set.empty)
 
 monoToNatSimp :: Size -> DioMono -> NatFormula
 monoToNatSimp n (DioMono m vp) = truncBots $ natToFormula m .*. (bigTimes . map (powerToNatSimp n)) vp
@@ -86,19 +115,46 @@ toFormula :: Size -> DioFormula -> Formula
 --   this function tracks the maximum value of all subformulas.
 --   the length of all vectors is possibly pruned according to these
 --   maximum values
-toFormula = toFormulaGen polyToNat
+toFormula n phi = fst mainResult &&& bigAnd (Set.map (varRestrict n) (snd mainResult))
+                  where varRestrict n v = atom $ (natToPoly . (+ 1) . bound) n `Grt` varToPoly v
+                        mainResult      = toFormula' n phi
 
-polyToNat :: Size -> DioPoly -> NatFormula
-polyToNat n xs = (truncBots . truncTo (natToBits newmax) . bigPlus . map fst) subresults
+toFormula' :: Size -> DioFormula -> (Formula, Set.Set DioVar)
+toFormula' = toFormGen polyToNat
+
+polyToNat :: Size -> DioPoly -> (NatFormula, Set.Set DioVar)
+polyToNat n xs = ((truncBots . truncTo (natToBits newmax) . bigPlus . map fst) subresults, Set.unions ((map (snd . snd)) subresults))
   where subresults = map (monoToNat n) xs
-        newmax     = (sum . map snd) subresults
+        newmax     = (sum . map (fst . snd)) subresults
 
-monoToNat :: Size -> DioMono -> (NatFormula, Int)
-monoToNat n (DioMono m vp) = (newformula powers, newmax)
+monoToNat :: Size -> DioMono -> (NatFormula, (Int, Set.Set DioVar))
+monoToNat n (DioMono m vp) = (newformula powers, (newmax, Set.unions (map (snd . snd) powers)))
   where newformula = truncBots . truncTo (natToBits newmax) .  ((natToFormula m) .*.) . bigTimes . map fst
         powers     = map (powerToNat n) vp
-        newmax     = m * (product . map snd) powers
+        newmax     = m * (product . map (fst . snd)) powers
 
-powerToNat :: Size -> VPower -> (NatFormula, Int)
-powerToNat n (VPower v m) | m > 0     = (natAtom n v .*. powerToNatSimp n (VPower v (m - 1)), (bound n) ^ m)
-                          | otherwise = ([Top], 1)
+powerToNat :: Size -> VPower -> (NatFormula, (Int, Set.Set DioVar))
+powerToNat n (VPower v m) | m > 0     = (natAtom n v .*. powerToNatSimp n (VPower v (m - 1)), ((bound n) ^ m, Set.singleton (DioVar v)))
+                          | otherwise = ([Top], (1, Set.empty))
+
+natToPoly :: Int -> DioPoly
+natToPoly n = [DioMono n []]
+
+varToPoly :: DioVar -> DioPoly
+varToPoly (DioVar v) = [DioMono 1 [VPower v 1]]
+
+-- vars :: NatFormula -> [forall a. (DioAtomClass a) => a]
+-- vars (A (Atom a)) = case (cast a :: Maybe DioAtom) of 
+--                       Just (p `Grt` q)  -> Set.union (polyVars p) (polyVars q)
+--                       Just (p `Equ` q)  -> Set.union (polyVars p) (polyVars q)
+--                       Nothing           -> Set.empty
+-- vars (p `And` q)  = Set.union (vars p) (vars q)
+-- vars (p `Or` q)   = Set.union (vars p) (vars q)
+-- vars (p `Imp` q)  = Set.union (vars p) (vars q)
+-- vars (p `Iff` q)  = Set.union (vars p) (vars q)
+-- vars (Neg p)      = vars p
+-- vars Top          = Set.empty
+-- vars Bot          = Set.empty
+-- 
+-- polyVars :: a
+-- polyVars = undefined
