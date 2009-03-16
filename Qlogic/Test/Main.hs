@@ -2,7 +2,7 @@ module Main where
 
 import Test.QuickCheck
 import Test.QuickCheck.Batch 
-import Qlogic.MiniSat hiding (run)
+import Qlogic.MiniSat
 import Qlogic.Cnf hiding (top,bot)
 import System.IO.Unsafe (unsafePerformIO)
 import Qlogic.Formula

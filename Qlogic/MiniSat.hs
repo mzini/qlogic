@@ -4,14 +4,13 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Qlogic.MiniSat 
- -- (Answer(..)
- -- , solve
- -- , solveCnf
- -- , MiniSat
- -- , addFormula
- -- , addClauses
- -- , value
- -- )
+ ( solve
+ , solveCnf
+ , MiniSat
+ , addFormula
+ , addClauses
+ , value
+ )
 
 where 
 import qualified Control.Monad.State.Lazy as State
