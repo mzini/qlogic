@@ -27,6 +27,8 @@ module Qlogic.Formula
   -- ** non-standard Boolean connectives 
   , oneOrThree
   , twoOrThree
+  , exactlyOne
+  , ite
 --  , isAtom
   ) 
 where
@@ -151,6 +153,21 @@ forall xs f = foldr (\ x fm -> f x &&& fm) top xs
 
 exist :: Foldable t => t a -> (a -> Formula) -> Formula
 exist xs f = foldr (\ x fm -> f x ||| fm) bot xs 
+
+
+ite :: Formula -> Formula -> Formula -> Formula
+ite Top t _ = t
+ite Bot _ e = e
+ite g   t e = g --> t &&& neg g --> e
+
+
+exactlyOne :: [Formula] -> Formula
+
+exactlyOne []     = Bot
+exactlyOne (x:xs) = ite x (exactlyNone xs) (exactlyOne xs)
+
+exactlyNone  :: [Formula] -> Formula
+exactlyNone xs = forall xs neg
 
 -- utility functions
 
