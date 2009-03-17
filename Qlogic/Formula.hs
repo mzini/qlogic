@@ -29,6 +29,7 @@ module Qlogic.Formula
   , twoOrThree
   , exactlyOne
   , ite
+  , fm
 --  , isAtom
   ) 
 where
@@ -168,6 +169,11 @@ exactlyOne (x:xs) = ite x (exactlyNone xs) (exactlyOne xs)
 
 exactlyNone  :: [Formula] -> Formula
 exactlyNone xs = forall xs neg
+
+fm :: Bool -> Formula
+fm True = top
+fm False = bot
+
 
 -- utility functions
 
