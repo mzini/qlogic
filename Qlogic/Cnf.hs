@@ -18,18 +18,19 @@ module Qlogic.Cnf
   , fold
   , isContradiction
   , fromFormula
+  , clauseCount
   ) 
 where
 import Prelude hiding (foldr)
 import qualified Data.List as List
 import Qlogic.Formula (Formula(..), Atom)
 
-data Literal = PosLit Atom -- ^ positive literal
-             | NegLit Atom -- ^ negative literal
+data Literal = PosLit !Atom -- ^ positive literal
+             | NegLit !Atom -- ^ negative literal
                deriving (Show, Eq, Ord)
 
 -- | a clause is a sequence of 'Literal's
-newtype Clause = Clause {clauseToList :: [Literal]}
+newtype Clause = Clause {clauseToList :: [Literal]} deriving Show
 
 emptyClause :: Clause
 -- ^ the empty 'Clause'
@@ -41,7 +42,7 @@ clause = Clause
 -- | a Conjunctive Normal Form is a sequence of 'Clause's
 data CNF = Empty
            | Singleton Clause
-           | CNF :&: CNF
+           | CNF :&: CNF deriving Show
 
 isContradiction :: CNF -> Bool
 isContradiction (Singleton (Clause [])) = True
@@ -76,6 +77,11 @@ fold :: (Clause -> b -> b) -> b -> CNF -> b
 fold _ b Empty           = b
 fold f b (Singleton a)   = f a b
 fold f b (cnf1 :&: cnf2) = fold f (fold f b cnf2) cnf1
+
+clauseCount :: CNF -> Int
+clauseCount Empty =  0
+clauseCount (Singleton a) = 1
+clauseCount (a :&: b) = clauseCount a + clauseCount b
 
 fromFormula :: Formula -> CNF
 -- ^ translate a 'Formula' into a 'CNF' with the possibly exponential textbook algorithm

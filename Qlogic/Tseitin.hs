@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module Qlogic.Tseitin (transform)
+module Qlogic.Tseitin 
 
 where
 import Control.Monad (liftM)
@@ -12,12 +12,8 @@ import Qlogic.Assign (Assign, toMap, fromMap, empty)
 import Qlogic.Formula
 import qualified Qlogic.Cnf as Cnf
 import Qlogic.Cnf (CNF, (+&+), Literal(..))
-
--- data ExtendedAtom a = L (Formula a) -- ^ an atom representing a formula
---                     | V a -- ^ an atom of the input formula
---                       deriving (Eq, Ord, Show)
-
-data ExtendedLiteral = Lit Literal
+import System.IO.Unsafe
+data ExtendedLiteral = Lit !Literal
                      | TopLit
                      | BotLit
                        deriving (Eq, Ord, Show)
@@ -41,11 +37,11 @@ nlit fm = negate' $ lit fm
 
 
 toCnf :: [[ExtendedLiteral]] -> CNF
-toCnf = foldr appendClause Cnf.top
-  where appendClause cl cnf | TopLit `elem` cl = cnf
-                            | otherwise        = Cnf.singleton (Cnf.clause $ foldr lower [] cl) +&+ cnf
-        lower BotLit l = l
-        lower (Lit a) l = a:l
+toCnf = foldl appendClause Cnf.top
+  where appendClause cnf cl | TopLit `elem` cl = cnf
+                            | otherwise        = Cnf.singleton (Cnf.clause $ foldl lower [] cl) +&+ cnf
+        lower l BotLit  = l
+        lower l (Lit a) = a:l
 
 data St = St { posSet :: Set.Set Formula -- ^  lists all formulas with positive CNF constructed
              , negSet :: Set.Set Formula -- ^ lists all formulas with negative CNF constructed
@@ -63,21 +59,21 @@ getPSet = liftM posSet State.get
 getNSet = liftM negSet State.get
 
 setPSet :: Set.Set Formula -> PGSetMonad ()
+setPSet set = State.modify $ \s -> s{posSet = set}
+
 setNSet :: Set.Set Formula -> PGSetMonad ()
-setPSet set = State.modify $ \s -> s {posSet = set}
-setNSet set = State.modify $ \s -> s {negSet = set}
+setNSet set = State.modify $ \s -> s{negSet = set}
 
 maybeCompute_  :: (PGSetMonad (Set.Set Formula)) 
                -> (Set.Set Formula -> PGSetMonad ()) 
                -> Formula 
                -> PGSetMonad CNF 
                -> PGSetMonad CNF
-
-maybeCompute_ getSet setSet fm m = 
+maybeCompute_ getSet setSet fm m =
   do s <- getSet
-     case fm `Set.member` s of
-       False -> setSet (Set.insert fm s) >> m
-       True  -> return Cnf.top
+     (if fm `Set.member` s
+      then return Cnf.top
+      else setSet (Set.insert fm s) >> m)
 
 maybeComputePos, maybeComputeNeg :: Formula -> PGSetMonad CNF -> PGSetMonad CNF
 maybeComputePos = maybeCompute_ getPSet setPSet
@@ -153,7 +149,7 @@ transformMinus Top            = maybeComputeNeg Top $ return Cnf.top
 transformMinus Bot            = maybeComputeNeg Bot $ return Cnf.top
 
 transformList :: [Formula] -> PGSetMonad CNF
-transformList fms = liftM (foldr (+&+) Cnf.top) (mapM transform_ fms)
+transformList fms = liftM (foldl (+&+) Cnf.top) (mapM transform_ fms)
   where transform_ fm = do cnf <- transformPlus fm
                            return $ toCnf [[lit fm]] +&+ cnf
 
