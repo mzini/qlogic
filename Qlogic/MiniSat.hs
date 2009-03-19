@@ -11,6 +11,8 @@ module Qlogic.MiniSat
  , addFormula
  , addClauses
  , value
+ , Two (..)
+ , constructValue
  )
 
 where 
@@ -89,7 +91,7 @@ class Typeable a => Decoder e p a | e -> p, e -> a, a -> e where
   fresh :: p -> e
   add :: a -> e -> e
 
-data Two a b = Two a b
+data Two a b = a :&: b
 data OneOf a b = Foo a | Bar b deriving Typeable
 
 
@@ -99,9 +101,9 @@ instance (Decoder e1 p1 a1, Decoder e2 p2 a2) => Decoder (Two e1 e2) (Two p1 p2)
                 Nothing -> case extract a of 
                           Just a'  -> Just $ Bar a'
                           Nothing -> Nothing
-  fresh (Two p1 p2) = Two (fresh p1) (fresh p2)
-  add (Foo a) (Two e1 e2) = Two (add a e1) e2
-  add (Bar b) (Two e1 e2) = Two e1 (add b e2)
+  fresh (p1 :&: p2) = fresh p1 :&: fresh p2
+  add (Foo a) (e1 :&: e2) = add a e1 :&: e2
+  add (Bar b) (e1 :&: e2) = e1 :&: (add b e2)
 
 constructValue :: (Decoder e p a) => p -> MiniSat e
 constructValue p = State.get >>= Map.foldWithKey f (return $ fresh p)
@@ -115,7 +117,6 @@ ifM mc mt me = do c <- mc
 
 value :: (Decoder e p a) => MiniSat () -> p -> IO (Maybe e)
 value m p = run $ m >> ifM (lift $ Sat.solve []) (Just `liftM` constructValue p) (return Nothing)
-
 
 
 
