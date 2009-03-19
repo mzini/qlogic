@@ -193,7 +193,7 @@ exist xs f = foldr (\ x fm -> f x ||| fm) bot xs
 ite :: Formula -> Formula -> Formula -> Formula
 ite Top t _ = t
 ite Bot _ e = e
-ite g   t e = g --> t &&& neg g --> e
+ite g   t e = (g --> t) &&& (neg g --> e)
 
 
 exactlyOne :: [Formula] -> Formula

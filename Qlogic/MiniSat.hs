@@ -11,7 +11,7 @@ module Qlogic.MiniSat
  , addFormula
  , addClauses
  , value
- , Two (..)
+ , (:&:) (..)
  , constructValue
  )
 
@@ -84,28 +84,26 @@ solve_ cnf = do addClauses cnf
 
 
 
-class Typeable a => Decoder e p a | e -> p, e -> a, a -> e where
+class Typeable a => Decoder e a | e -> a, a -> e where
   extract :: Atom -> Maybe a
   extract (Atom a) = cast a
-  fresh :: p -> e
   add :: a -> e -> e
 
-data Two a b = a :&: b
+data a :&: b = a :&: b
 data OneOf a b = Foo a | Bar b deriving Typeable
 
 
-instance (Decoder e1 p1 a1, Decoder e2 p2 a2) => Decoder (Two e1 e2) (Two p1 p2) (OneOf a1 a2) where 
+instance (Decoder e1 a1, Decoder e2 a2) => Decoder (e1 :&: e2) (OneOf a1 a2) where 
   extract a = case extract a of 
                 Just a' -> Just $ Foo a'
                 Nothing -> case extract a of 
                           Just a'  -> Just $ Bar a'
                           Nothing -> Nothing
-  fresh (p1 :&: p2) = fresh p1 :&: fresh p2
   add (Foo a) (e1 :&: e2) = add a e1 :&: e2
   add (Bar b) (e1 :&: e2) = e1 :&: (add b e2)
 
-constructValue :: (Decoder e p a) => p -> MiniSat e
-constructValue p = State.get >>= Map.foldWithKey f (return $ fresh p)
+constructValue :: (Decoder e a) => e -> MiniSat e
+constructValue e = State.get >>= Map.foldWithKey f (return $ e)
   where f a v m = case extract a of
                     Just a' -> getModelValue v >>= \ val -> if val then add a' `liftM` m else m
                     Nothing -> m
@@ -114,7 +112,7 @@ ifM :: Monad m =>  m Bool -> m a -> m a -> m a
 ifM mc mt me = do c <- mc
                   if c then mt else me
 
-value :: (Decoder e p a) => MiniSat () -> p -> IO (Maybe e)
+value :: (Decoder e a) => MiniSat () -> e -> IO (Maybe e)
 value m p = run $ m >> ifM (lift $ Sat.solve []) (Just `liftM` constructValue p) (return Nothing)
 
 
