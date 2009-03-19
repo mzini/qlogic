@@ -54,8 +54,7 @@ addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
                         lift $ Sat.addClause mlits
                         m
         mkLit (PosLit l) = literal l
-        mkLit (NegLit l) = do l' <- literal l
-                              return $  l'
+        mkLit (NegLit l) = Sat.neg `liftM` literal l
 
 addFormula :: Formula -> MiniSat ()
 addFormula fm = addClauses $ Tseitin.transform fm
