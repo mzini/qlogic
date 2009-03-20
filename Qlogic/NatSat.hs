@@ -4,10 +4,11 @@ module Qlogic.NatSat
   (
   -- * Types
   NatFormula
-  , PLVec
+  , PLVec(..)
   , NatAssign
   , Size(..)
   -- * Operations
+  , emptyAssignment
   , natToFormula
   , truncBots
   , truncTo
@@ -27,11 +28,13 @@ module Qlogic.NatSat
 
 import Qlogic.Formula
 import qualified Qlogic.Assign as A
+import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Typeable
 
 data Size = Bits Int
           | Bound Int
+          deriving (Show, Typeable)
 
 natToBits :: Int -> Int
 -- ^ calculates the necessary length of a list of Top/Bot values for representing
@@ -56,6 +59,9 @@ instance (Eq a, Ord a, Show a, Typeable a) => AtomClass (PLVec a)
 
 type NatAssign a = Map.Map a Int
 
+emptyAssignment :: NatAssign a
+emptyAssignment = Map.empty
+
 natToFormula :: Int -> NatFormula
 -- ^ transforms a natural number into a list of Top/Bot values
 natToFormula n | n == 0    = [Bot]
@@ -65,7 +71,7 @@ natToFormula n | n == 0    = [Bot]
 
 padBots :: Int -> NatFormula -> NatFormula
 padBots n | n == 0    = id
-          | n > 0     = (:) Bot . padBots (n - 1)
+          | n > 0     = (Bot :) . padBots (n - 1)
           | otherwise = error "Only natural numbers allowed in argument!"
 
 truncBots :: NatFormula -> NatFormula
@@ -161,3 +167,11 @@ natAssignment s = Map.foldWithKey f Map.empty
         modifyBit i (Just n) = Just $ n + 2^(bts - i)
         modifyBit i Nothing  = Just $ 2^(bts - i)
         bts = bits s
+
+eval :: NatFormula -> A.Assign -> Int
+eval f ass = boolsToInt $ map (flip A.eval ass) f
+
+boolsToInt :: [Bool] -> Int
+boolsToInt = List.foldl' f 0
+             where f n True = 2 * n + 1
+                   f n False = 2 * n

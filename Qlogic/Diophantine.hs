@@ -108,7 +108,6 @@ powerToNatSimp n (VPower v m) | m > 0     = natAtom n v .*. powerToNatSimp n (VP
 -- Optimisation c of Section 5 in the Fuhs-et-al paper
 -- prunes all "numbers" to their maximum length based on
 -- the assumption that the value of all variables is at most n
--- FIXME: AS: [v]<=n muss noch erzwungen werden
 toFormula :: Size -> DioFormula -> Formula
 -- ^ translates a Diophantine constraint into a propositional formula,
 --   where variables are instantiated by values between 0 and n.
@@ -142,19 +141,3 @@ natToPoly n = [DioMono n []]
 
 varToPoly :: DioVar -> DioPoly
 varToPoly (DioVar v) = [DioMono 1 [VPower v 1]]
-
--- vars :: NatFormula -> [forall a. (DioAtomClass a) => a]
--- vars (A (Atom a)) = case (cast a :: Maybe DioAtom) of 
---                       Just (p `Grt` q)  -> Set.union (polyVars p) (polyVars q)
---                       Just (p `Equ` q)  -> Set.union (polyVars p) (polyVars q)
---                       Nothing           -> Set.empty
--- vars (p `And` q)  = Set.union (vars p) (vars q)
--- vars (p `Or` q)   = Set.union (vars p) (vars q)
--- vars (p `Imp` q)  = Set.union (vars p) (vars q)
--- vars (p `Iff` q)  = Set.union (vars p) (vars q)
--- vars (Neg p)      = vars p
--- vars Top          = Set.empty
--- vars Bot          = Set.empty
--- 
--- polyVars :: a
--- polyVars = undefined

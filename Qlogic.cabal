@@ -17,7 +17,6 @@ library
                     Qlogic.NatSat
                     Qlogic.Tseitin
                     Qlogic.Cnf
-                    Qlogic.Diophantine
 
  other-modules:     Sat
                     Name
@@ -54,7 +53,6 @@ executable qlogic-test
                     Qlogic.NatSat
                     Qlogic.Tseitin
                     Qlogic.Cnf
-                    Qlogic.Diophantine
                     Sat
                     Name
                     Str
