@@ -88,6 +88,7 @@ fromFormula :: Formula -> CNF
 fromFormula = cnf . nnf . implFree
 
 implFree (a `Imp` b) = Neg (implFree a) `Or` implFree b
+implFree (Ite g t e) = implFree (g `Imp` t) `And` implFree ((Neg g) `Imp` e)
 implFree (a `Or` b)  = implFree a `Or` implFree b
 implFree (a `And` b) = implFree a `And` implFree b
 implFree (a `Iff` b) = (Neg ifa `Or` ifb) `And` (ifa `Or` Neg ifb)

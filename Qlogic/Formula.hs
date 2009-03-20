@@ -71,6 +71,7 @@ data Formula = A Atom
              | And Formula Formula
              | Or  Formula Formula
              | Iff Formula Formula
+             | Ite Formula Formula Formula
              | Imp Formula Formula
              | Neg Formula
              | Top 
@@ -193,7 +194,7 @@ exist xs f = foldr (\ x fm -> f x ||| fm) bot xs
 ite :: Formula -> Formula -> Formula -> Formula
 ite Top t _ = t
 ite Bot _ e = e
-ite g   t e = (g --> t) &&& (neg g --> e)
+ite g   t e = Ite g t e
 
 
 exactlyOne :: [Formula] -> Formula

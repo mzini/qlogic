@@ -9,7 +9,7 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Data.Typeable
 import Qlogic.Assign (Assign, toMap, fromMap, empty)
-import Qlogic.Formula
+import Qlogic.Formula hiding (fm)
 import qualified Qlogic.Cnf as Cnf
 import Qlogic.Cnf (CNF, (+&+), Literal(..))
 import System.IO.Unsafe
@@ -42,6 +42,7 @@ toCnf = foldl appendClause Cnf.top
                             | otherwise        = Cnf.singleton (Cnf.clause $ foldl lower [] cl) +&+ cnf
         lower l BotLit  = l
         lower l (Lit a) = a:l
+        lower _ TopLit  = error "Tseitin.toCnf: Aggh. My head just exploded"
 
 data St = St { posSet :: Set.Set Formula -- ^  lists all formulas with positive CNF constructed
              , negSet :: Set.Set Formula -- ^ lists all formulas with negative CNF constructed
@@ -85,13 +86,11 @@ transformPlus fm@(a `And` b) =
   do cnfA <- transformPlus a
      cnfB <- transformPlus b
      return $ toCnf [[nlit fm, lit a], [nlit fm, lit b]] +&+ cnfA +&+ cnfB
-     -- bigAnd [(lvar fm) `Imp` (lvar a `And` lvar b), phiA, phiB]
 transformPlus fm@(a `Or` b) =
   maybeComputePos fm $
   do cnfA <- transformPlus a
      cnfB <- transformPlus b
      return $ toCnf [[nlit fm, lit a, lit b]] +&+ cnfA +&+ cnfB
-     -- bigAnd [(lvar fm) `Imp` (lvar a `Or` lvar b), phiA, phiB]
 transformPlus fm@(a `Iff` b) =
   maybeComputePos fm $
   do cnfApos <- transformPlus a
@@ -99,17 +98,19 @@ transformPlus fm@(a `Iff` b) =
      cnfBpos <- transformPlus b
      cnfBneg <- transformMinus b
      return $ toCnf [[nlit fm, nlit a, lit b], [nlit fm, lit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
-     --  bigAnd [lvar fm `Imp` (lvar a `Iff` lvar b), cnfApos, cnfAneg, cnfBpos, cnfBneg]
-     -- fm -> (a <-> b)
-     -- -fm | ((-a | b) & (a | -b))
-     -- (-fm | -a | b) & (-fm | a | -b)
-     --
+transformPlus fm@(Ite g t e) =
+  maybeComputePos fm $
+  do cnfGpos <- transformPlus g
+     cnfGneg <- transformMinus g
+     cnfT <- transformPlus t
+     cnfE <- transformPlus e
+     return $ toCnf [[nlit fm, nlit g, lit t], [nlit fm, lit g, lit e]] +&+ cnfGpos +&+ cnfGneg +&+ cnfT +&+ cnfE
+
 transformPlus fm@(a `Imp` b) =
   maybeComputePos fm $
   do cnfA <- transformMinus a
      cnfB <- transformPlus b
      return $ toCnf [[nlit fm, nlit a, lit b]] +&+ cnfA +&+ cnfB
-     -- bigAnd [lvar fm `Imp` (lvar a `Imp` lvar b), cnfA, cnfB]
 transformPlus fm@(Neg a)       = maybeComputePos fm $ transformMinus a
 transformPlus fm@(A _)       = maybeComputePos fm $ return Cnf.top
 transformPlus Top              = maybeComputePos Top $ return Cnf.top
@@ -120,14 +121,11 @@ transformMinus fm@(a `And` b) =
   do cnfA <- transformMinus a
      cnfB <- transformMinus b
      return $ toCnf [[nlit a, nlit b, lit fm]] +&+ cnfA +&+ cnfB
-            -- bigAnd [(lvar a `And` lvar b) `Imp` (lvar fm), cnfA, cnfB]
 transformMinus fm@(a `Or` b) =
   maybeComputeNeg fm $ 
   do cnfA <- transformMinus a
      cnfB <- transformMinus b
      return $ toCnf [[nlit a, lit fm], [nlit b, lit fm]] +&+ cnfA +&+ cnfB
-     -- [(lvar a `Or` lvar b) `Imp` (lvar fm)  , cnfA, cnfB]
-     -- -a & -b | fm === (-a | fm) & (-b | fm)
 transformMinus fm@(a `Iff` b) =
   maybeComputeNeg fm $
   do cnfApos <- transformPlus a
@@ -135,14 +133,18 @@ transformMinus fm@(a `Iff` b) =
      cnfBpos <- transformPlus b
      cnfBneg <- transformMinus b
      return $ toCnf [[lit fm, lit a, lit b], [lit fm, nlit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
-
 transformMinus fm@(a `Imp` b) =
   maybeComputeNeg fm $
   do cnfA <- transformPlus a
      cnfB <- transformMinus b
      return $ toCnf [[lit fm, lit a], [lit fm, nlit b]] +&+ cnfA +&+ cnfB
--- bigAnd [lvar (lvar a `Imp` lvar b) `Imp` fm, cnfA, cnfB]
-
+transformMinus fm@(Ite g t e) =
+  maybeComputeNeg fm $
+  do cnfGpos <- transformPlus g
+     cnfGneg <- transformMinus g
+     cnfTneg <- transformMinus t
+     cnfEneg <- transformMinus e
+     return $ toCnf [[lit fm, nlit t, nlit g], [lit fm, nlit e, lit g]] +&+ cnfGpos +&+ cnfGneg +&+ cnfTneg +&+ cnfEneg
 transformMinus fm@(Neg a)     = maybeComputeNeg fm $ transformPlus a
 transformMinus fm@(A _)     = maybeComputeNeg fm $ return Cnf.top
 transformMinus Top            = maybeComputeNeg Top $ return Cnf.top
