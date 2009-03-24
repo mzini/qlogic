@@ -77,37 +77,6 @@ data Formula = A Atom
              | Top 
              | Bot deriving (Eq, Ord, Typeable, Show)
 
-
--- compareFormula :: Formula -> Formula -> Ordering
--- f `compareFormula` g | weight f > weight g = GT
---                      | weight f < weight g = LT
---                      | otherwise           = case (f, g) of
---                                                (And f1 f2, And g1 g2) -> compare2 f1 f2 g1 g2
---                                                (Or f1 f2, Or g1 g2) -> compare2 f1 f2 g1 g2
---                                                (Iff f1 f2, Iff g1 g2) -> compare2 f1 f2 g1 g2
---                                                (Imp f1 f2, Imp g1 g2) -> compare2 f1 f2 g1 g2
---                                                (Neg f, Neg g) -> f `compare` g
---                                                (Top, Top) -> EQ
---                                                (Bot, Bot) -> EQ
---                                                (A x, A y) -> x `compare` y
---                 where compare2 f1 f2 g1 g2 = case f1 `compare` g1 of 
---                                                EQ -> f2 `compare` g2
---                                                a -> a
---                       weight (And _ _) = 0
---                       weight (Or _ _)  = 1
---                       weight (Iff _ _) = 2
---                       weight (Imp _ _) = 3
---                       weight (Neg _)   = 4
---                       weight Top       = 5
---                       weight Bot       = 6
---                       weight (A _)     = 7
-
--- instance Eq Formula where 
---   f == g = f `compareFormula` g == EQ
-
--- instance Ord Formula where
---   compare = compareFormula
-
 simplify :: Formula -> Formula
 -- ^ performs basic simplification of formulas
 simplify (a `And` b) = simplify a &&& simplify b
