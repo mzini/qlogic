@@ -24,6 +24,7 @@ module Qlogic.NatSat
   , (.=.)
   , natAtom
   , natAssignment
+  , eval
   ) where
 
 import Qlogic.Formula
