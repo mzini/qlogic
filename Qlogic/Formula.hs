@@ -106,6 +106,8 @@ a   ||| b   = a `Or` b
 -- ^if and only if
 Top <-> b   = b
 Bot <-> b   = neg b
+Top <-> Top = Top
+Bot <-> Bot = Bot
 a   <-> Top = a
 a   <-> Bot = neg a
 a   <-> b   = a `Iff` b
@@ -161,9 +163,11 @@ exist xs f = foldr (\ x fm -> f x ||| fm) bot xs
 
 
 ite :: Formula -> Formula -> Formula -> Formula
-ite Top t _ = t
-ite Bot _ e = e
-ite g   t e = Ite g t e
+ite Top t       _ = t
+ite Bot _       e = e
+ite g   Bot     e = neg g &&& e
+ite g   t   Bot   = g &&& t
+ite g       t   e = Ite g t e
 
 
 exactlyOne :: [Formula] -> Formula
