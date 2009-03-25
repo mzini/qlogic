@@ -121,6 +121,8 @@ a   ||| b   = a `Or` b
 -- ^if and only if
 Top <-> b   = b
 Bot <-> b   = neg b
+Top <-> Top = Top
+Bot <-> Bot = Bot
 a   <-> Top = a
 a   <-> Bot = neg a
 a   <-> b   = a `Iff` b
