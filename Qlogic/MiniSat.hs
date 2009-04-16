@@ -61,9 +61,10 @@ addFormula fm = addClauses $ Tseitin.transform fm
 
 extractAssign :: MiniSat Assign
 extractAssign = State.get >>= Map.foldWithKey f (return Assign.empty)
-    where f k l m = do assign <- m
-                       v <- getModelValue l
-                       return $ Assign.add [k |-> v] assign
+    where f k l m | Tseitin.isFormulaAtom k = m
+                  | otherwise               = do assign <- m
+                                                 v <- getModelValue l
+                                                 return $ Assign.add [k |-> v] assign
 
 run :: MiniSat r -> IO r
 run m = Sat.run $ State.evalStateT m Map.empty

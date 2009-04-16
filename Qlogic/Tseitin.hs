@@ -13,6 +13,7 @@ import Qlogic.Formula hiding (fm)
 import qualified Qlogic.Cnf as Cnf
 import Qlogic.Cnf (CNF, (+&+), Literal(..))
 import System.IO.Unsafe
+
 data ExtendedLiteral = Lit !Literal
                      | TopLit
                      | BotLit
@@ -20,6 +21,12 @@ data ExtendedLiteral = Lit !Literal
 
 data Form = Form Formula deriving (Eq, Ord, Show, Typeable)
 instance AtomClass Form 
+
+isFormulaAtom :: Atom -> Bool
+isFormulaAtom a = case fromAtom a of 
+                    Just (Form _) -> True
+                    Nothing       -> False
+                    
 
 lit :: Formula -> ExtendedLiteral
 lit (A x)   = Lit $ PosLit $ x
