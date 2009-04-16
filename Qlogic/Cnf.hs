@@ -23,6 +23,7 @@ module Qlogic.Cnf
 where
 import Prelude hiding (foldr)
 import qualified Data.List as List
+
 import Qlogic.Formula (Formula(..), Atom)
 
 data Literal = PosLit !Atom -- ^ positive literal
@@ -64,7 +65,7 @@ fromList :: [Clause] -> CNF
 -- ^ translate a 'List' of 'Clause's to a 'CNF'
 fromList []     = Empty
 fromList [a]    = Singleton a
-fromList (a:as) = List.foldr (:&:) (Singleton a) $ map Singleton as
+fromList (a:as) = List.foldl (:&:) (Singleton a) $ map Singleton as
 
 (+&+) :: CNF -> CNF -> CNF
 -- ^ concatenation of two 'CNF's
@@ -80,8 +81,9 @@ fold f b (cnf1 :&: cnf2) = fold f (fold f b cnf2) cnf1
 
 clauseCount :: CNF -> Int
 clauseCount Empty =  0
-clauseCount (Singleton a) = 1
+clauseCount (Singleton _) = 1
 clauseCount (a :&: b) = clauseCount a + clauseCount b
+
 
 fromFormula :: Formula -> CNF
 -- ^ translate a 'Formula' into a 'CNF' with the possibly exponential textbook algorithm

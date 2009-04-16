@@ -8,9 +8,10 @@ module Qlogic.Formula
   (-- * Types
    Formula(..) 
   , Atom(..)
-  , AtomClass
+  , AtomClass(..)
   -- * Operations 
   , simplify
+  , atoms
   -- ** Standard Boolean connectives, simplifying
   , (|||)
   , (&&&) 
@@ -28,6 +29,7 @@ module Qlogic.Formula
   , oneOrThree
   , twoOrThree
   , exactlyOne
+  , atmostOne
   , ite
   , fm
 --  , isAtom
@@ -37,6 +39,8 @@ import Data.Typeable
 import Data.Foldable
 import Prelude hiding (foldl, foldr)
 import qualified Data.Maybe as Maybe
+import qualified Data.Set as Set
+import Data.Set (Set)
 
 infixr 3 &&&
 infixr 2 |||
@@ -77,6 +81,17 @@ data Formula = A Atom
              | Top 
              | Bot deriving (Eq, Ord, Typeable, Show)
 
+atoms :: Formula -> Set Atom
+atoms (A a) = Set.singleton a
+atoms (a `And` b) = atoms a `Set.union` atoms b
+atoms (a `Or` b)  = atoms a `Set.union` atoms b
+atoms (a `Iff` b) = atoms a `Set.union` atoms b
+atoms (Ite a b c) = Set.unions [atoms a, atoms b, atoms c]
+atoms (a `Imp` b) = atoms a `Set.union`atoms b
+atoms (Neg a)     = atoms a
+atoms Top = Set.empty
+atoms Bot = Set.empty
+
 simplify :: Formula -> Formula
 -- ^ performs basic simplification of formulas
 simplify (a `And` b) = simplify a &&& simplify b
@@ -106,8 +121,6 @@ a   ||| b   = a `Or` b
 -- ^if and only if
 Top <-> b   = b
 Bot <-> b   = neg b
-Top <-> Top = Top
-Bot <-> Bot = Bot
 a   <-> Top = a
 a   <-> Bot = neg a
 a   <-> b   = a `Iff` b
@@ -177,6 +190,11 @@ exactlyOne (x:xs) = ite x (exactlyNone xs) (exactlyOne xs)
 
 exactlyNone  :: [Formula] -> Formula
 exactlyNone xs = forall xs neg
+
+atmostOne :: [Formula] -> Formula
+atmostOne [] = Top
+atmostOne [x] = Top
+atmostOne fms = bigOr [bigAnd [ neg f2 | f2 <- fms, f1 /= f2] | f1 <- fms]
 
 fm :: Bool -> Formula
 fm True = top
