@@ -23,7 +23,7 @@ library
                     Str
                     Form
 
- build-depends:     containers, mtl, base==3.0.3.1
+ build-depends:     containers, mtl, base==3.0.3.1, pretty
 
  extensions:        CPP
                     ForeignFunctionInterface
@@ -45,7 +45,7 @@ library
 executable qlogic-test
  main-is:           Qlogic/Test/Main.hs
 
- build-depends:     containers, mtl, base==3.0.3.1, QuickCheck
+ build-depends:     containers, mtl, base==3.0.3.1, QuickCheck, pretty
 
  other-modules:     Qlogic.Formula
                     Qlogic.Assign

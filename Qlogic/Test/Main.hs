@@ -24,14 +24,16 @@ arbFm 0 = frequency
           ]
 arbFm m = frequency
           [ 
-           (1, bin And)
-          , (1, bin Or)
+           (1, nary And)
+          , (1, nary Or)
           , (1, bin Iff)
           , (1, bin Imp)
           , (1, liftM Neg (arbFm $ m - 1 ))
           ]
-  where bin f = liftM2 f (arbFm m') (arbFm m')
-        m' = m `div` 2
+  where bin f = liftM2 f (arbFm $ m `div` 2) (arbFm  $ m `div` 2)
+        nary f = do n <- arbitrary::Gen Int
+                    fms <- mapM (\ _ -> arbFm $ m `div` n) [1..n]
+                    return $ f fms
 
 -- sat properties
 prop_cnf_equisat :: Formula -> Bool

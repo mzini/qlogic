@@ -14,6 +14,7 @@ module Qlogic.Cnf
   , bot
   , singleton
   , fromList
+  , fromCnfs
   , (+&+)
   , fold
   , isContradiction
@@ -73,6 +74,9 @@ Empty +&+ b     = b
 a     +&+ Empty = a
 a     +&+ b     = a :&: b
 
+fromCnfs :: [CNF] -> CNF
+fromCnfs = List.foldr (+&+) top
+
 fold :: (Clause -> b -> b) -> b -> CNF -> b 
 -- ^ folding over 'CNF's
 fold _ b Empty           = b
@@ -89,31 +93,32 @@ fromFormula :: Formula -> CNF
 -- ^ translate a 'Formula' into a 'CNF' with the possibly exponential textbook algorithm
 fromFormula = cnf . nnf . implFree
 
-implFree (a `Imp` b) = Neg (implFree a) `Or` implFree b
-implFree (Ite g t e) = implFree (g `Imp` t) `And` implFree ((Neg g) `Imp` e)
-implFree (a `Or` b)  = implFree a `Or` implFree b
-implFree (a `And` b) = implFree a `And` implFree b
-implFree (a `Iff` b) = (Neg ifa `Or` ifb) `And` (ifa `Or` Neg ifb)
+implFree (a `Imp` b) = Neg $ Or [implFree a, implFree b]
+implFree (Ite g t e) = And $ [implFree $ g `Imp` t,  implFree $ (Neg g) `Imp` e]
+implFree (Or l)      = Or [implFree e | e <- l]
+implFree (And l)     = And [implFree e | e <- l]
+implFree (a `Iff` b) = And [Or [Neg ifa, ifb], Or [ifa, Neg ifb]]
   where ifa = implFree a
         ifb = implFree b
 implFree (Neg a)     = Neg $ implFree a
 implFree x           = x
 
-nnf (Neg (a `Or` b))  = nnf (Neg a) `And` nnf (Neg b)
-nnf (Neg (a `And` b)) = nnf (Neg a) `Or` nnf (Neg b)
-nnf (Neg (Neg a))     = nnf a
-nnf (Neg Top)         = Bot
-nnf (Neg Bot)         = Top
-nnf (a `And` b)       = nnf a `And` nnf b
-nnf (a `Or` b)        = nnf a `Or` nnf b
-nnf a                 = a
+nnf (Neg (Or l))     = And [nnf (Neg e) | e <- l]
+nnf (Neg (And l))    = Or [nnf (Neg e) | e <- l]
+nnf (Neg (Neg a))    = nnf a
+nnf (Neg Top)        = Bot
+nnf (Neg Bot)        = Top
+nnf (And l)          = And $ map nnf l
+nnf (Or l)           = Or $ map nnf l
+nnf a                = a
 
-cnf Top                = top
-cnf Bot                = bot
-cnf (a `And` b)        = cnf a +&+ cnf b
-cnf (a `Or` b)         = distr (cnf a) (cnf b)
-cnf (Neg (A a))     = singleton $ clause [NegLit a]
-cnf (A a)           = singleton $ clause [PosLit a]
+cnf Top              = top
+cnf Bot              = bot
+cnf (And l)          = fromCnfs $ map cnf l
+cnf (Or l)           = List.foldr distr top $ map cnf l
+cnf (Neg (A a))      = singleton $ clause [NegLit a]
+cnf (A a)            = singleton $ clause [PosLit a]
+
 
 distr Empty _                     = Empty
 distr _ Empty                     = Empty

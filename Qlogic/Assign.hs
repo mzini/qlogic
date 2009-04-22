@@ -11,14 +11,17 @@ module Qlogic.Assign
   , fromMap
   , toMap
   , eval 
+  , prettyPrint
 )
 where
 import qualified Data.Map as Map
 import qualified Data.List as List
-import Control.Monad (join)
 import Prelude hiding (lookup)
 import Qlogic.Formula
 import Data.Maybe (fromMaybe)
+import Text.PrettyPrint.HughesPJ hiding (empty)
+import qualified Text.PrettyPrint.HughesPJ as PP
+
 type Assign = Map.Map Atom Bool
 
 -- | A 'Binding' maps a variable to a Boolean value
@@ -52,11 +55,19 @@ toMap = id
 
 eval :: Formula -> Assign -> Bool
 -- ^ evaluate a 'Formula' under the given assignment
-eval (A a)    ass = fromMaybe False $ lookup a ass
-eval (a `And` b) ass = eval a ass && eval b ass
-eval (a `Or` b)  ass = eval a ass || eval b ass
+eval (A a)       ass = fromMaybe False $ lookup a ass
+eval (And l)     ass = all (flip eval ass) l
+eval (Or l)      ass = not $ all (not . flip eval ass) l
 eval (a `Iff` b) ass = eval a ass == eval b ass
 eval (a `Imp` b) ass = not (eval a ass) || eval b ass
 eval (Neg a)     ass = not (eval a ass)
 eval Top _           = True
 eval Bot _           = False
+eval (Ite a b c) ass = case eval a ass of 
+                         True  -> eval b ass
+                         False -> eval c ass
+
+
+prettyPrint :: Assign -> Doc
+prettyPrint = Map.foldWithKey pp PP.empty
+  where pp a v d = (pprintAtom a <+> text "|->"  <+> (text $ show v)) $$ d

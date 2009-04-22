@@ -9,10 +9,10 @@ module Qlogic.Formula
    Formula(..) 
   , Atom(..)
   , AtomClass(..)
-  -- * Operations 
+  -- * operations 
   , simplify
   , atoms
-  -- ** Standard Boolean connectives, simplifying
+  -- ** standard Boolean connectives, simplifying
   , (|||)
   , (&&&) 
   , (-->) 
@@ -32,7 +32,9 @@ module Qlogic.Formula
   , atmostOne
   , ite
   , fm
---  , isAtom
+  -- ** utility functions
+  , pprintFormula
+  , pprintAtom
   ) 
 where
 import Data.Typeable
@@ -41,12 +43,12 @@ import Prelude hiding (foldl, foldr)
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
+import Text.PrettyPrint.HughesPJ
 
 infixr 3 &&&
 infixr 2 |||
 infixr 1 -->
 infixr 1 <->
-
 
 data Atom = forall a. (AtomClass a) => Atom a
 
@@ -55,6 +57,7 @@ class (Eq a, Ord a, Show a, Typeable a) => AtomClass a  where
             toAtom = Atom 
             fromAtom :: Atom -> Maybe a
             fromAtom (Atom a) = cast a
+
 
 compareAtom :: Atom -> Atom -> Ordering
 Atom (a :: at) `compareAtom` Atom (b :: bt) | ta == tb = (cast a :: Maybe at) `compare` (cast b :: Maybe at)
@@ -72,8 +75,8 @@ instance Show Atom where
   show (Atom a) = "Atom " ++ show  a
 
 data Formula = A Atom
-             | And Formula Formula
-             | Or  Formula Formula
+             | And [Formula]
+             | Or  [Formula]
              | Iff Formula Formula
              | Ite Formula Formula Formula
              | Imp Formula Formula
@@ -81,21 +84,39 @@ data Formula = A Atom
              | Top 
              | Bot deriving (Eq, Ord, Typeable, Show)
 
+pprintAtom :: Atom -> Doc
+pprintAtom (Atom a) = text $ show a
+
+pprintBinFm :: String -> Formula -> Formula -> Doc
+pprintBinFm s a b = parens $ text s <+> (pprintFormula a $$ pprintFormula b)
+
+pprintFormula :: Formula -> Doc
+pprintFormula (A a)       = pprintAtom a
+pprintFormula (And l)     = parens $ text "/\\" <+> sep (punctuate (text " ") $ map pprintFormula l)
+pprintFormula (Or l)      = parens $ text "\\/" <+> sep (punctuate (text " ") $ map pprintFormula l)
+pprintFormula (Iff a b)   = pprintBinFm "<->" a b
+pprintFormula (Imp a b)   = pprintBinFm "-->" a b
+pprintFormula (Ite a b c) = parens $ text "ite" <+> (pprintFormula a $$ pprintFormula b $$ pprintFormula c)
+pprintFormula (Neg a)     = parens $ text "-" <+> (pprintFormula a)
+pprintFormula Top         = text "T"
+pprintFormula Bot         = text "F"
+
+
 atoms :: Formula -> Set Atom
-atoms (A a) = Set.singleton a
-atoms (a `And` b) = atoms a `Set.union` atoms b
-atoms (a `Or` b)  = atoms a `Set.union` atoms b
+atoms (A a)       = Set.singleton a
+atoms (And l)     = Set.unions [atoms e | e <- l]
+atoms (Or l)      = Set.unions [atoms e | e <- l]
 atoms (a `Iff` b) = atoms a `Set.union` atoms b
 atoms (Ite a b c) = Set.unions [atoms a, atoms b, atoms c]
 atoms (a `Imp` b) = atoms a `Set.union`atoms b
 atoms (Neg a)     = atoms a
-atoms Top = Set.empty
-atoms Bot = Set.empty
+atoms Top         = Set.empty
+atoms Bot         = Set.empty
 
 simplify :: Formula -> Formula
 -- ^ performs basic simplification of formulas
-simplify (a `And` b) = simplify a &&& simplify b
-simplify (a `Or` b)  = simplify a ||| simplify b
+simplify (And l)     = bigAnd [simplify e | e <- l]
+simplify (Or l)      = bigAnd [simplify e | e <- l]
 simplify (a `Iff` b) = simplify a <-> simplify b
 simplify (a `Imp` b) = simplify a --> simplify b
 simplify (Neg a)     = neg $ simplify a
@@ -103,26 +124,26 @@ simplify a           = a
 
 (&&&) :: Formula -> Formula -> Formula 
 -- ^conjunction
-Top &&& b   = b
-Bot &&& _   = Bot
-a   &&& Top = a
-_   &&& Bot = Bot
-a   &&& b   = a `And` b
+Top      &&& b        = b
+Bot      &&& _        = Bot
+a        &&& Top      = a
+_        &&& Bot      = Bot
+(And l1) &&& (And l2) = And $ l1 ++ l2
+a        &&& b        = And [a,b]
 
 (|||) :: Formula -> Formula -> Formula 
 -- ^disjunction
-Top ||| _   = Top
-Bot ||| b   = b
-_   ||| Top = Top
-a   ||| Bot = a
-a   ||| b   = a `Or` b
+Top     ||| _       = Top
+Bot     ||| b       = b
+_       ||| Top     = Top
+a       ||| Bot     = a
+(Or l1) ||| (Or l2) = Or $ l1 ++ l2
+a       ||| b       = Or [a,b]
 
 (<->) :: Formula -> Formula -> Formula 
 -- ^if and only if
 Top <-> b   = b
 Bot <-> b   = neg b
-Top <-> Top = Top
-Bot <-> Bot = Bot
 a   <-> Top = a
 a   <-> Bot = neg a
 a   <-> b   = a `Iff` b
@@ -150,10 +171,12 @@ top :: Formula
 -- ^ truth
 top = Top
 
+-- MA:TODO: gut so?
 bigAnd :: Foldable t => t Formula -> Formula
 -- ^ conjunction of multiple formulas
 bigAnd = foldr (&&&) Top
 
+-- MA:TODO: gut so?
 bigOr :: Foldable t => t Formula -> Formula
 -- ^ disjunction of multiple formulas
 bigOr = foldr (|||) Bot
@@ -176,14 +199,12 @@ forall xs f = foldr (\ x fm -> f x &&& fm) top xs
 exist :: Foldable t => t a -> (a -> Formula) -> Formula
 exist xs f = foldr (\ x fm -> f x ||| fm) bot xs 
 
-
 ite :: Formula -> Formula -> Formula -> Formula
 ite Top t       _ = t
 ite Bot _       e = e
 ite g   Bot     e = neg g &&& e
 ite g   t   Bot   = g &&& t
 ite g       t   e = Ite g t e
-
 
 exactlyOne :: [Formula] -> Formula
 
