@@ -32,14 +32,14 @@ import qualified Qlogic.Cnf as Cnf
 import Qlogic.Assign ((|->), Assign)
 import qualified Qlogic.Tseitin as Tseitin
 
-type AtomMap = Map.Map Atom Sat.Lit
+type AtomMap = Map.Map PropositionalAtom Sat.Lit
 
 type MiniSat r = State.StateT AtomMap Sat.S r
 
-newLit :: MiniSat Sat.Lit 
+newLit :: MiniSat Sat.Lit
 newLit = lift Sat.newLit
 
-literal :: Atom -> MiniSat Sat.Lit
+literal :: PropositionalAtom -> MiniSat Sat.Lit
 literal a = do literals <- State.get 
                maybe (newLit >>= \ lit -> State.withStateT (Map.insert a lit) $ return lit)
                      return $ Map.lookup a literals
@@ -47,7 +47,7 @@ literal a = do literals <- State.get
 getModelValue :: Sat.Lit -> MiniSat Bool
 getModelValue v = lift $ Sat.getModelValue v
 
-addClauses :: Cnf.CNF -> MiniSat ()
+addClauses :: Cnf.CNF PropositionalAtom -> MiniSat ()
 addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
                | otherwise               = Cnf.fold f (return ()) cnf
   where f clause m = do mlits <- mapM mkLit $ Cnf.clauseToList clause
@@ -56,7 +56,7 @@ addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
         mkLit (PosLit l) = literal l
         mkLit (NegLit l) = Sat.neg `liftM` literal l
 
-addFormula :: Formula -> MiniSat ()
+addFormula :: PropositionalFormula -> MiniSat ()
 addFormula fm = addClauses $ Tseitin.transform fm
 
 extractAssign :: MiniSat Assign
@@ -70,13 +70,13 @@ run :: MiniSat r -> IO r
 run m = Sat.run $ State.evalStateT m Map.empty
 
 
-solve :: Formula -> IO (Maybe Assign)
+solve :: PropositionalFormula -> IO (Maybe Assign)
 solve fm = run $ solve_ $ Tseitin.transform fm
 
-solveCnf :: Cnf.CNF -> IO (Maybe Assign)
+solveCnf :: Cnf.CNF PropositionalAtom -> IO (Maybe Assign)
 solveCnf = run . solve_
 
-solve_ :: Cnf.CNF -> MiniSat (Maybe Assign)
+solve_ :: Cnf.CNF PropositionalAtom -> MiniSat (Maybe Assign)
 solve_ cnf = do addClauses cnf
                 isSat <- lift $ Sat.solve []
                 case isSat of 
@@ -86,8 +86,8 @@ solve_ cnf = do addClauses cnf
 
 
 class Typeable a => Decoder e a | e -> a, a -> e where
-  extract :: Atom -> Maybe a
-  extract (Atom a) = cast a
+  extract :: PropositionalAtom -> Maybe a
+  extract (PropositionalAtom a) = cast a
   add :: a -> e -> e
 
 data a :&: b = a :&: b

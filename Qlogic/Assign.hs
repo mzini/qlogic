@@ -10,7 +10,7 @@ module Qlogic.Assign
   , add
   , fromMap
   , toMap
-  , eval 
+  , eval
   , prettyPrint
 )
 where
@@ -22,17 +22,17 @@ import Data.Maybe (fromMaybe)
 import Text.PrettyPrint.HughesPJ hiding (empty)
 import qualified Text.PrettyPrint.HughesPJ as PP
 
-type Assign = Map.Map Atom Bool
+type Assign = Map.Map PropositionalAtom Bool
 
 -- | A 'Binding' maps a variable to a Boolean value
-type Binding = (Atom, Bool)
+type Binding = (PropositionalAtom, Bool)
 
-lookup :: Atom -> Assign -> Maybe Bool
+lookup :: PropositionalAtom -> Assign -> Maybe Bool
 -- ^ lookup the truth-value of a variable from the given assignment, 
 -- or return 'Nothing' when the given variable is not bound.
 lookup = Map.lookup
 
-(|->) :: Atom -> Bool -> Binding
+(|->) :: PropositionalAtom -> Bool -> Binding
 -- ^ construct a 'Binding'
 a |-> b = (a,b)
 
@@ -46,14 +46,14 @@ add :: [Binding] -> Assign -> Assign
 add bs ass = List.foldl insert ass bs
     where insert ass' (a,b) = Map.insert a b ass'
 
-fromMap :: Map.Map Atom Bool -> Assign
+fromMap :: Map.Map PropositionalAtom Bool -> Assign
 fromMap = id
 
-toMap :: Assign -> Map.Map Atom Bool
+toMap :: Assign -> Map.Map PropositionalAtom Bool
 toMap = id
 
 
-eval :: Formula -> Assign -> Bool
+eval :: PropositionalFormula -> Assign -> Bool
 -- ^ evaluate a 'Formula' under the given assignment
 eval (A a)       ass = fromMaybe False $ lookup a ass
 eval (And l)     ass = all (flip eval ass) l
@@ -70,4 +70,4 @@ eval (Ite a b c) ass = case eval a ass of
 
 prettyPrint :: Assign -> Doc
 prettyPrint = Map.foldWithKey pp PP.empty
-  where pp a v d = (pprintAtom a <+> text "|->"  <+> (text $ show v)) $$ d
+  where pp a v d = (pprintPropositionalAtom a <+> text "|->"  <+> (text $ show v)) $$ d

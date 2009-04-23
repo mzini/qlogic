@@ -25,71 +25,71 @@ where
 import Prelude hiding (foldr)
 import qualified Data.List as List
 
-import Qlogic.Formula (Formula(..), Atom)
+import Qlogic.Formula (Formula(..), PropositionalFormula, PropositionalAtom)
 
-data Literal = PosLit !Atom -- ^ positive literal
-             | NegLit !Atom -- ^ negative literal
+data Literal a = PosLit !a -- ^ positive literal
+               | NegLit !a -- ^ negative literal
                deriving (Show, Eq, Ord)
 
 -- | a clause is a sequence of 'Literal's
-newtype Clause = Clause {clauseToList :: [Literal]} deriving Show
+newtype Clause a = Clause {clauseToList :: [Literal a]} deriving Show
 
-emptyClause :: Clause
+emptyClause :: Clause a
 -- ^ the empty 'Clause'
 emptyClause = clause []
 
-clause :: [Literal] -> Clause
-clause = Clause 
+clause :: [Literal a] -> Clause a
+clause = Clause
 
 -- | a Conjunctive Normal Form is a sequence of 'Clause's
-data CNF = Empty
-           | Singleton Clause
-           | CNF :&: CNF deriving Show
+data CNF a = Empty
+           | Singleton (Clause a)
+           | CNF a :&: CNF a deriving Show
 
-isContradiction :: CNF -> Bool
+isContradiction :: CNF a -> Bool
 isContradiction (Singleton (Clause [])) = True
 isContradiction _                       = False
 
-top :: CNF
+top :: CNF a
 -- ^ the empty set of clauses
 top = Empty
 
-bot :: CNF
+bot :: CNF a
 -- ^ the singleton set containing the empty clause
 bot = Singleton emptyClause
 
-singleton :: Clause -> CNF
+singleton :: Clause a -> CNF a
 -- ^ the singleton set containing the empty clause
 singleton = Singleton
 
-fromList :: [Clause] -> CNF
+fromList :: [Clause a] -> CNF a
 -- ^ translate a 'List' of 'Clause's to a 'CNF'
 fromList []     = Empty
 fromList [a]    = Singleton a
 fromList (a:as) = List.foldl (:&:) (Singleton a) $ map Singleton as
 
-(+&+) :: CNF -> CNF -> CNF
+(+&+) :: CNF a -> CNF a -> CNF a
 -- ^ concatenation of two 'CNF's
 Empty +&+ b     = b
 a     +&+ Empty = a
 a     +&+ b     = a :&: b
 
-fromCnfs :: [CNF] -> CNF
+fromCnfs :: [CNF a] -> CNF a
 fromCnfs = List.foldr (+&+) top
 
-fold :: (Clause -> b -> b) -> b -> CNF -> b 
+fold :: (Clause a -> b -> b) -> b -> CNF a -> b
 -- ^ folding over 'CNF's
 fold _ b Empty           = b
 fold f b (Singleton a)   = f a b
 fold f b (cnf1 :&: cnf2) = fold f (fold f b cnf2) cnf1
 
-clauseCount :: CNF -> Int
+clauseCount :: CNF a -> Int
 clauseCount Empty =  0
 clauseCount (Singleton _) = 1
 clauseCount (a :&: b) = clauseCount a + clauseCount b
 
 
-fromFormula :: Formula -> CNF
+fromFormula :: Formula a -> CNF a
 -- ^ translate a 'Formula' into a 'CNF' with the possibly exponential textbook algorithm
 fromFormula = cnf . nnf . implFree
 

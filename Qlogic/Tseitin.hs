@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module Qlogic.Tseitin 
-
+module Qlogic.Tseitin
 where
+
 import Control.Monad (liftM)
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Set as Set
@@ -14,28 +14,27 @@ import qualified Qlogic.Cnf as Cnf
 import Qlogic.Cnf (CNF, (+&+), Literal(..), fromCnfs)
 import System.IO.Unsafe
 
-data ExtendedLiteral = Lit !Literal
-                     | TopLit
-                     | BotLit
+data ExtendedLiteral a = Lit !(Literal a)
+                       | TopLit
+                       | BotLit
                        deriving (Eq, Ord, Show)
 
-data Form = Form Formula deriving (Eq, Ord, Show, Typeable)
-instance AtomClass Form 
+data Form = Form PropositionalFormula deriving (Eq, Ord, Show, Typeable)
+instance PropositionalAtomClass Form
 
-isFormulaAtom :: Atom -> Bool
-isFormulaAtom a = case fromAtom a of 
+isFormulaAtom :: PropositionalAtom -> Bool
+isFormulaAtom a = case fromPropositionalAtom a of
                     Just (Form _) -> True
                     Nothing       -> False
-                    
 
-lit :: Formula -> ExtendedLiteral
+lit :: PropositionalFormula -> ExtendedLiteral PropositionalAtom
 lit (A x)   = Lit $ PosLit $ x
 lit Top     = TopLit
 lit Bot     = BotLit
 lit (Neg x) = nlit x
-lit fm      = Lit $ PosLit $ Atom $ Form fm
+lit fm      = Lit $ PosLit $ PropositionalAtom $ Form fm
 
-nlit :: Formula -> ExtendedLiteral
+nlit :: PropositionalFormula -> ExtendedLiteral PropositionalAtom
 nlit fm = negate' $ lit fm
   where negate' (Lit (PosLit x)) = Lit (NegLit x)
         negate' (Lit (NegLit x)) = Lit (PosLit x)
@@ -43,7 +42,7 @@ nlit fm = negate' $ lit fm
         negate' BotLit           = TopLit
 
 
-toCnf :: [[ExtendedLiteral]] -> CNF
+toCnf :: Eq a => [[ExtendedLiteral a]] -> CNF a
 toCnf = foldl appendClause Cnf.top
   where appendClause cnf cl | TopLit `elem` cl = cnf
                             | otherwise        = Cnf.singleton (Cnf.clause $ foldl lower [] cl) +&+ cnf
@@ -51,8 +50,8 @@ toCnf = foldl appendClause Cnf.top
         lower l (Lit a) = a:l
         lower _ TopLit  = error "Tseitin.toCnf: Aggh. My head just exploded"
 
-data St = St { posSet :: Set.Set Formula -- ^  lists all formulas with positive CNF constructed
-             , negSet :: Set.Set Formula -- ^ lists all formulas with negative CNF constructed
+data St = St { posSet :: Set.Set PropositionalFormula -- ^  lists all formulas with positive CNF constructed
+             , negSet :: Set.Set PropositionalFormula -- ^ lists all formulas with negative CNF constructed
              }
 
 -- | The state monad for constructing CNFs exploits sharing by keeping
@@ -60,34 +59,34 @@ data St = St { posSet :: Set.Set Formula -- ^  lists all formulas with positive 
 type PGSetMonad r = State.State St r
 
 
-getPSet :: PGSetMonad (Set.Set Formula)
-getNSet :: PGSetMonad (Set.Set Formula)
+getPSet :: PGSetMonad (Set.Set PropositionalFormula)
+getNSet :: PGSetMonad (Set.Set PropositionalFormula)
 
 getPSet = liftM posSet State.get
 getNSet = liftM negSet State.get
 
-setPSet :: Set.Set Formula -> PGSetMonad ()
+setPSet :: Set.Set PropositionalFormula -> PGSetMonad ()
 setPSet set = State.modify $ \s -> s{posSet = set}
 
-setNSet :: Set.Set Formula -> PGSetMonad ()
+setNSet :: Set.Set PropositionalFormula -> PGSetMonad ()
 setNSet set = State.modify $ \s -> s{negSet = set}
 
-maybeCompute_  :: (PGSetMonad (Set.Set Formula)) 
-               -> (Set.Set Formula -> PGSetMonad ()) 
-               -> Formula 
-               -> PGSetMonad CNF 
-               -> PGSetMonad CNF
+maybeCompute_  :: (PGSetMonad (Set.Set PropositionalFormula))
+               -> (Set.Set PropositionalFormula -> PGSetMonad ())
+               -> PropositionalFormula
+               -> PGSetMonad (CNF PropositionalAtom)
+               -> PGSetMonad (CNF PropositionalAtom)
 maybeCompute_ getSet setSet fm m =
   do s <- getSet
      (if fm `Set.member` s
       then return Cnf.top
       else setSet (Set.insert fm s) >> m)
 
-maybeComputePos, maybeComputeNeg :: Formula -> PGSetMonad CNF -> PGSetMonad CNF
+maybeComputePos, maybeComputeNeg :: PropositionalFormula -> PGSetMonad (CNF PropositionalAtom) -> PGSetMonad (CNF PropositionalAtom)
 maybeComputePos = maybeCompute_ getPSet setPSet
 maybeComputeNeg = maybeCompute_ getNSet setNSet
 
-transformPlus,transformMinus :: Formula -> PGSetMonad CNF
+transformPlus,transformMinus :: PropositionalFormula -> PGSetMonad (CNF PropositionalAtom)
 transformPlus fm@(And l) =
   maybeComputePos fm $
   do cnfs <- mapM transformPlus l
@@ -158,7 +157,7 @@ transformMinus Bot            = maybeComputeNeg Bot $ return Cnf.top
 --   where transform_ fm = do cnf <- transformPlus fm
 --                            return $ toCnf [[lit fm]] +&+ cnf
 
-transform :: Formula -> CNF
+transform :: PropositionalFormula -> CNF PropositionalAtom
 transform fm = toCnf [[lit fm]] +&+ State.evalState (transformPlus fm) St{posSet = Set.empty, negSet = Set.empty}
   -- where splitAnd (a `And` b) = splitAnd a ++ splitAnd b
   --       splitAnd fm'          = [fm']

@@ -22,7 +22,7 @@ import qualified Data.Set as Set
 
 data DioVar  = forall a. (DioAtomClass a) => DioVar a
 data VPower  = forall a. (DioAtomClass a) => VPower a Int deriving Typeable
-data DioMono = DioMono Int [VPower] 
+data DioMono = DioMono Int [VPower]
                deriving (Eq, Ord, Show, Typeable)
 type DioPoly = [DioMono]
 data DioAtom = Grt DioPoly DioPoly

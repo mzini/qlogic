@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Main where
 
 import Test.QuickCheck
@@ -9,12 +11,12 @@ import Qlogic.Formula
 import Qlogic.Assign
 import Control.Monad (liftM, liftM2)
 
-instance AtomClass Int
+instance PropositionalAtomClass Int
 
 -- arbitrary formulas
-instance Arbitrary Formula where
+instance Arbitrary PropositionalFormula where
   arbitrary = sized arbFm
-  coarbitrary = undefined          
+  coarbitrary = undefined
 
 arbFm 0 = frequency 
           [ 
@@ -36,7 +38,7 @@ arbFm m = frequency
                     return $ f fms
 
 -- sat properties
-prop_cnf_equisat :: Formula -> Bool
+prop_cnf_equisat :: PropositionalFormula -> Bool
 prop_cnf_equisat f = unsafePerformIO $ do f1 <- solve f
                                           f2 <- solveCnf $ fromFormula f
                                           return $  f1 `satEq` f2
@@ -44,13 +46,13 @@ prop_cnf_equisat f = unsafePerformIO $ do f1 <- solve f
         satEq (Just _) (Just _) = True
         satEq _ _                             = False
 
-prop_simplify_equisat :: Formula -> Bool
+prop_simplify_equisat :: PropositionalFormula -> Bool
 prop_simplify_equisat f = (unsafePerformIO $ solve f) `satEq` (unsafePerformIO $ solve $ simplify f)
   where satEq Nothing Nothing     = True
         satEq (Just _) (Just _) = True
         satEq _ _                             = False
 
-prop_solve_eval :: Formula -> Property
+prop_solve_eval :: PropositionalFormula -> Property
 prop_solve_eval fm = isSat res ==> eval fm (ass res)
   where res = unsafePerformIO $ solve fm
         isSat (Just _ ) = True
@@ -65,7 +67,7 @@ options = TestOptions
           , length_of_tests = 120 -- time limit in seconds
           , debug_tests     = True}
 
-instance AtomClass Char
+instance PropositionalAtomClass Char
 a = atom 'a'
 b = atom 'b'
 c = atom 'c'

@@ -52,11 +52,11 @@ bits (Bound n) = natToBits n
 bound (Bits n) = bitsToNat n
 bound (Bound n) = n
 
-type NatFormula = [Formula]
+type NatFormula = [PropositionalFormula]
 data PLVec a = PLVec a Int
   deriving (Eq, Ord, Show, Typeable)
 
-instance (Eq a, Ord a, Show a, Typeable a) => AtomClass (PLVec a)
+instance (Eq a, Ord a, Show a, Typeable a) => PropositionalAtomClass (PLVec a)
 
 type NatAssign a = Map.Map a Int
 
@@ -123,7 +123,7 @@ bigTimes :: [NatFormula] -> NatFormula
 --   as lists of propositional formulas
 bigTimes = foldr (.*.) [Top]
 
-(.>.) :: NatFormula -> NatFormula -> Formula
+(.>.) :: NatFormula -> NatFormula -> PropositionalFormula
 -- ^ performs "greater than" comparisons of natural numbers in the representation
 --   as a list of propositional formulas
 [] .>. []                  = Bot
@@ -135,7 +135,7 @@ ps .>. qs | lengthdiff > 0 = padBots lengthdiff ps .>. qs
          p                 = head ps
          q                 = head qs
 
-(.=.) :: NatFormula -> NatFormula -> Formula
+(.=.) :: NatFormula -> NatFormula -> PropositionalFormula
 -- ^ performs equality comparisons of natural numbers in the representation
 --   as a list of propositional formulas
 [] .=. []                  = Top
@@ -161,12 +161,12 @@ baseFromVec (PLVec x _) = x
 
 natAssignment :: (Ord a, Typeable a) => Size -> A.Assign -> NatAssign a
 natAssignment s = Map.foldWithKey f Map.empty
-  where f _        False natAss = natAss
-        f (Atom k) True  natAss = case cast k of 
+  where f _        False natAss              = natAss
+        f (PropositionalAtom k) True  natAss = case cast k of 
                                     Just (PLVec var i) -> Map.alter (modifyBit i) var natAss
                                     Nothing            -> natAss
-        modifyBit i (Just n) = Just $ n + 2^(bts - i)
-        modifyBit i Nothing  = Just $ 2^(bts - i)
+        modifyBit i (Just n)                 = Just $ n + 2^(bts - i)
+        modifyBit i Nothing                  = Just $ 2^(bts - i)
         bts = bits s
 
 eval :: NatFormula -> A.Assign -> Int
