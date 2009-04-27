@@ -12,7 +12,6 @@ import Qlogic.Assign (Assign, toMap, fromMap, empty)
 import Qlogic.Formula hiding (fm)
 import qualified Qlogic.Cnf as Cnf
 import Qlogic.Cnf (CNF, (+&+), Literal(..), fromCnfs)
-import System.IO.Unsafe
 
 data ExtendedLiteral a = Lit !(Literal a)
                        | TopLit

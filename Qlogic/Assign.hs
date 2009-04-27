@@ -17,7 +17,7 @@ where
 import qualified Data.Map as Map
 import qualified Data.List as List
 import Prelude hiding (lookup)
-import Qlogic.Formula
+import Qlogic.Formula hiding ((&&),(||),not)
 import Data.Maybe (fromMaybe)
 import Text.PrettyPrint.HughesPJ hiding (empty)
 import qualified Text.PrettyPrint.HughesPJ as PP

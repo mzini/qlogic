@@ -10,6 +10,7 @@ module Qlogic.Formula
   , PropositionalAtom(..)
   , PropositionalAtomClass(..)
   , PropositionalFormula
+  , Boolean(..)
   -- * operations
   , simplify
   , atoms
@@ -22,8 +23,6 @@ module Qlogic.Formula
   , neg
   , top
   , bot
-  , bigAnd
-  , bigOr
   , forall
   , exist
   -- ** non-standard Boolean connectives 
@@ -38,9 +37,10 @@ module Qlogic.Formula
   , pprintPropositionalAtom
   ) 
 where
+import Prelude hiding ((&&),(||),not,foldl,foldr)
+import qualified Prelude as Prelude
 import Data.Typeable
 import Data.Foldable
-import Prelude hiding (foldl, foldr)
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -86,6 +86,33 @@ data Formula a = A a
                | Neg (Formula a)
                | Top
                | Bot deriving (Eq, Ord, Typeable, Show)
+
+class Boolean a where
+  (&&) :: a -> a -> a
+  (||) :: a -> a -> a
+  not :: a -> a
+  true :: a
+  false :: a
+  bigAnd :: Foldable t => t a -> a
+  bigAnd = foldr (&&) true
+  bigOr :: Foldable t => t a -> a
+  bigOr = foldr (||) false
+
+instance Boolean Bool where
+  (&&) = (Prelude.&&)
+  (||) = (Prelude.||)
+  not = Prelude.not
+  true = True
+  false = False
+
+instance Boolean (Formula a) where
+  (&&) = (&&&)
+  (||) = (|||)
+  not = neg
+  true = top
+  false = bot
+
+instance PropositionalAtomClass a => PropositionalAtomClass (Formula a)
 
 type PropositionalFormula = Formula PropositionalAtom
 
@@ -175,14 +202,6 @@ bot = Bot
 top :: Formula a
 -- ^ truth
 top = Top
-
-bigAnd :: Foldable t => t (Formula a) -> Formula a
--- ^ conjunction of multiple formulas
-bigAnd = foldr (&&&) Top
-
-bigOr :: Foldable t => t (Formula a) -> Formula a
--- ^ disjunction of multiple formulas
-bigOr = foldr (|||) Bot
 
 atom :: PropositionalAtomClass a => a -> PropositionalFormula
 -- ^ lift an atom to a formula

@@ -15,6 +15,7 @@ library
                     Qlogic.Assign
                     Qlogic.MiniSat
                     Qlogic.NatSat
+                    Qlogic.Diophantine
                     Qlogic.Tseitin
                     Qlogic.Cnf
 
@@ -51,6 +52,7 @@ executable qlogic-test
                     Qlogic.Assign
                     Qlogic.MiniSat
                     Qlogic.NatSat
+                    Qlogic.Diophantine
                     Qlogic.Tseitin
                     Qlogic.Cnf
                     Sat
