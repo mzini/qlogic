@@ -8,7 +8,7 @@ MINISAT_INST=Folkung/instantiate
 
 all: prepare build doc_haskell
 
-build: build_minisat build_haskell
+build: prepare build_minisat build_haskell
 
 install: install_minisat install_haskell
 
@@ -18,6 +18,7 @@ clean: clean_minisat clean_haskell
 
 prepare:
 	tar xvzf $(FOLKUNGTGZ)
+	patch $(FOLKUNG)/Haskell/Form.hs folkung-warnings.patch
 
 .PHONY: clean
 
