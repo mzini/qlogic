@@ -60,9 +60,10 @@ class (Eq a, Ord a, Show a, Typeable a) => PropositionalAtomClass a  where
             fromPropositionalAtom (PropositionalAtom a) = cast a
 
 
-compareAtom :: Atom -> Atom -> Ordering
-Atom (a :: at) `compareAtom` Atom (b :: bt) | ta == tb = (cast a :: Maybe at) `compare` (cast b :: Maybe at)
-                                            | otherwise = show ta `compare` show tb 
+comparePropositionalAtom :: PropositionalAtom -> PropositionalAtom -> Ordering
+PropositionalAtom (a :: at) `comparePropositionalAtom` PropositionalAtom (b :: bt) 
+    | ta == tb = (cast a :: Maybe at) `compare` (cast b :: Maybe at)
+    | otherwise = show ta `compare` show tb 
    where ta = typeOf a
          tb = typeOf b
 
@@ -211,7 +212,7 @@ oneOrThree :: Formula a -> Formula a -> Formula a -> Formula a
 -- ^ demands that exacly one or all three formulas hold
 oneOrThree p q r = p <-> q <-> r
 
-twoOrThree :: Formula -> Formula -> Formula -> Formula
+twoOrThree :: Formula a -> Formula a -> Formula a -> Formula a
 -- ^ demands that exacly two or all three formulas hold.
 twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
 
@@ -243,24 +244,3 @@ atmostOne fms = bigOr [bigAnd [ neg f2 | f2 <- fms, f1 /= f2] | f1 <- fms]
 fm :: Bool -> Formula a
 fm True = top
 fm False = bot
-
-
--- utility functions
-
--- isVariable :: Formula -> Bool
--- -- ^ returns 'True' if the given formula is a variable
--- isVariable (PropositionalAtom _) = True
--- isVariable _       = True
-
--- isPropositionalAtom :: Formula -> Bool
--- -- ^ returns 'True' if the given formula is a variable, 'Top' or 'Bot'
--- isPropositionalAtom (PropositionalAtom _) = True
--- isPropositionalAtom Top     = True
--- isPropositionalAtom Bot     = True
--- isPropositionalAtom _       = False
-
--- isLiteral :: Formula -> Bool
--- -- ^ returns 'True' if the given formula is a variable or its negation
--- isLiteral (Neg (PropositionalAtom _)) = True
--- isLiteral (PropositionalAtom _)       = True
--- isLiteral _             = False
