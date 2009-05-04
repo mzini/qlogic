@@ -58,7 +58,6 @@ class (Eq a, Ord a, Show a, Typeable a) => AtomClass a  where
             fromAtom :: Atom -> Maybe a
             fromAtom (Atom a) = cast a
 
-
 compareAtom :: Atom -> Atom -> Ordering
 Atom (a :: at) `compareAtom` Atom (b :: bt) | ta == tb = (cast a :: Maybe at) `compare` (cast b :: Maybe at)
                                             | otherwise = show ta `compare` show tb 
@@ -188,6 +187,7 @@ atom = A . Atom
 oneOrThree :: Formula -> Formula -> Formula -> Formula
 -- ^ demands that exacly one or all three formulas hold
 oneOrThree p q r = p <-> q <-> r
+
 
 twoOrThree :: Formula -> Formula -> Formula -> Formula
 -- ^ demands that exacly two or all three formulas hold.

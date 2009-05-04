@@ -17,8 +17,7 @@ uninstall: uninstall_minisat unregister_haskell
 clean: clean_minisat clean_haskell
 
 prepare:
-	tar xvzf $(FOLKUNGTGZ)
-	patch $(FOLKUNG)/Haskell/Form.hs folkung-warnings.patch
+	sh prepareFolkung.sh $(FOLKUNG) $(FOLKUNGTGZ)
 
 .PHONY: clean
 
