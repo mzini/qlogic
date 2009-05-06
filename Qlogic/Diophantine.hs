@@ -3,6 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Qlogic.Diophantine
   (
@@ -12,9 +14,12 @@ module Qlogic.Diophantine
   , DioPoly
   , DioMono(..)
   , VPower(..)
+  , DioVar(..)
+  , DioVarClass(..)
   -- * Operations
   , toFormula
   , natToPoly
+  , varToPoly
   , add
   , bigAdd
   , mult
@@ -22,6 +27,8 @@ module Qlogic.Diophantine
   , simplify
   ) where
 
+import Prelude hiding ((&&),(||),not)
+import qualified Prelude as Prelude
 import Qlogic.NatSat
 import Qlogic.Formula hiding (simplify)
 import Control.Monad
@@ -30,7 +37,7 @@ import qualified Data.List as List
 import Data.Typeable
 import qualified Data.Set as Set
 
--- data DioVar  = forall a. (DioAtomClass a) => DioVar a
+data DioVar  = forall a. (DioVarClass a) => DioVar a deriving Typeable
 data VPower a  = VPower a Int
                deriving (Eq, Ord, Show, Typeable)
 data DioMono a = DioMono Int [VPower a]
@@ -40,38 +47,34 @@ data DioAtom a = Grt (DioPoly a) (DioPoly a)
                | Equ (DioPoly a) (DioPoly a)
                deriving (Eq, Ord, Show, Typeable)
 
-class PropositionalAtomClass a => DioAtomClass a
+class PropositionalAtomClass a => DioVarClass a where
+  toDioVar :: a -> DioVar
+  toDioVar = DioVar
+  fromDioVar :: DioVar -> Maybe a
+  fromDioVar (DioVar a) = cast a
+
 instance PropositionalAtomClass a => PropositionalAtomClass (DioAtom a)
 instance PropositionalAtomClass a => PropositionalAtomClass (DioPoly a)
 instance PropositionalAtomClass a => PropositionalAtomClass (DioMono a)
+instance PropositionalAtomClass a => DioVarClass a
 type DioFormula a = Formula (DioAtom a)
 
--- instance Show VPower where
---   show (VPower a i) = "VPower " ++ show a ++ " " ++ show i
---
--- instance Eq VPower where
---   VPower (a :: a) ai == VPower (b :: b) bi =
---     ai == bi && typeOf a == typeOf b && ((cast a :: Maybe a) == (cast b :: Maybe a))
---
--- instance Ord VPower where
---   VPower (a :: a) ai >= VPower (b :: b) bi | ai > bi  = True
---                                            | expeq && show ta > show tb = True
---                                            | expeq && show ta == show tb = ((cast a :: Maybe a) >= (cast b :: Maybe a))
---                                            | otherwise = False
---                                            where ta    = typeOf a
---                                                  tb    = typeOf b
---                                                  expeq = ai == bi
---
--- instance Eq DioVar where
---   DioVar (a :: a) == DioVar (b :: b) =
---     typeOf a == typeOf b && ((cast a :: Maybe a) == (cast b :: Maybe a))
---
--- instance Ord DioVar where
---   DioVar (a :: a) >= DioVar (b :: b) | show ta > show tb  = True
---                                      | show ta == show tb = ((cast a :: Maybe a) >= (cast b :: Maybe a))
---                                      | otherwise = False
---                                      where ta = typeOf a
---                                            tb = typeOf b
+instance Show DioVar where
+  show (DioVar a) = "DioVar " ++ show  a
+
+compareDioVar :: DioVar -> DioVar -> Ordering
+DioVar (a :: at) `compareDioVar` DioVar (b :: bt) | ta == tb = (cast a :: Maybe at) `compare` (cast b :: Maybe at)
+                                                  | otherwise = show ta `compare` show tb
+   where ta = typeOf a
+         tb = typeOf b
+
+instance Eq DioVar where
+  a == b = {-# SCC "DioVarEq" #-} a `compareDioVar` b == EQ
+
+instance Ord DioVar where
+  compare = {-# SCC "DioVarOrd" #-} compareDioVar
+
+instance PropositionalAtomClass DioVar
 
 dioAtom :: PropositionalAtomClass a => DioFormula a -> PropositionalFormula
 dioAtom fm = A (PropositionalAtom fm)
@@ -83,7 +86,7 @@ monoAtom :: PropositionalAtomClass a => Size -> DioMono a -> NatFormula
 monoAtom n m = natAtom n $ A (PropositionalAtom m)
 
 data St a = St { vars :: Set.Set a
-               , formulas :: Set.Set (DioFormula a)
+               , formulas :: Set.Set NatFormula
                , polys :: Set.Set (DioPoly a)
                , monos :: Set.Set (DioMono a)
                }
@@ -94,36 +97,36 @@ emptySt :: St a
 emptySt = St{vars = Set.empty, formulas = Set.empty, polys = Set.empty, monos = Set.empty}
 
 getVars :: DioSetMonad a (Set.Set a)
-getForms :: DioSetMonad a (Set.Set (DioFormula a))
+getForms :: DioSetMonad a (Set.Set NatFormula)
 getPolys :: DioSetMonad a (Set.Set (DioPoly a))
 getMonos :: DioSetMonad a (Set.Set (DioMono a))
 
 getVars = liftM vars State.get
 getForms = liftM formulas State.get
 getPolys = liftM polys State.get
-getMonos = liftM monos State.get
+getMonos = {-# SCC "getMonos" #-} liftM monos State.get
 
 setVars :: Set.Set a -> DioSetMonad a ()
 setVars set = State.modify $ \s -> s{vars = set}
 
-setForms :: Set.Set (DioFormula a) -> DioSetMonad a ()
+setForms :: Set.Set NatFormula -> DioSetMonad a ()
 setForms set = State.modify $ \s -> s{formulas = set}
 
 setPolys :: Set.Set (DioPoly a) -> DioSetMonad a ()
 setPolys set = State.modify $ \s -> s{polys = set}
 
 setMonos :: Set.Set (DioMono a) -> DioSetMonad a ()
-setMonos set = State.modify $ \s -> s{monos = set}
+setMonos set = {-# SCC "setMonos" #-} State.modify $ \s -> s{monos = set}
 
-maybeComputeForm :: PropositionalAtomClass a
-                 => DioFormula a
-                 -> DioSetMonad a PropositionalFormula
-                 -> DioSetMonad a PropositionalFormula
-maybeComputeForm fm m =
-  do s <- getForms
-     (if fm `Set.member` s
-      then return (dioAtom fm)
-      else setForms (Set.insert fm s) >> m)
+-- maybeComputeForm :: PropositionalAtomClass a
+--                  => DioFormula a
+--                  -> DioSetMonad a PropositionalFormula
+--                  -> DioSetMonad a PropositionalFormula
+-- maybeComputeForm fm m =
+--   do s <- getForms
+--      (if fm `Set.member` s
+--       then return (dioAtom fm)
+--       else setForms (Set.insert fm s) >> m)
 
 maybeComputePoly :: PropositionalAtomClass a
                  => Size
@@ -142,73 +145,67 @@ maybeComputeMono :: PropositionalAtomClass a
                  -> DioSetMonad a NatFormula
                  -> DioSetMonad a NatFormula
 maybeComputeMono n fm m =
-  do s <- getMonos
-     (if fm `Set.member` s
-      then return (monoAtom n fm)
-      else setMonos (Set.insert fm s) >> m)
+ {-# SCC "maybeComputeMono" #-} do s <- getMonos
+                                   (if {-# SCC "setmem" #-} fm `Set.member` s
+                                    then return (monoAtom n fm)
+                                    else setMonos (Set.insert fm s) >> m)
 
-toFormGen :: DioAtomClass a => (Size -> DioPoly a -> DioSetMonad a NatFormula) -> Size -> DioFormula a -> DioSetMonad a PropositionalFormula
-toFormGen f n fm@(A (p `Grt` q)) = maybeComputeForm fm $
-                                   do pres <- f n p
+toFormGen :: DioVarClass a => (Size -> DioPoly a -> DioSetMonad a NatFormula) -> Size -> DioFormula a -> DioSetMonad a PropositionalFormula
+toFormGen f n fm@(A (p `Grt` q)) = do pres <- f n p
                                       qres <- f n q
-                                      return $ (dioAtom fm) `Iff` (truncBots pres .>. truncBots qres)
-toFormGen f n fm@(A (p `Equ` q)) = maybeComputeForm fm $
-                                   do pres <- f n p
+                                      return $ pres .>. qres
+toFormGen f n fm@(A (p `Equ` q)) = do pres <- f n p
                                       qres <- f n q
-                                      return $ (dioAtom fm) `Iff` (truncBots pres .=. truncBots qres)
-toFormGen f n fm@(And ps)        = maybeComputeForm fm $
-                                   do press <- mapM (toFormGen f n) ps
-                                      return $ (dioAtom fm) `Iff` (bigAnd press)
-toFormGen f n fm@(Or ps)         = maybeComputeForm fm $
-                                   do press <- mapM (toFormGen f n) ps
-                                      return $ (dioAtom fm) `Iff` (bigOr press)
-toFormGen f n fm@(p `Imp` q)     = maybeComputeForm fm $
-                                   do pres <- toFormGen f n p
+                                      return $ pres .=. qres
+toFormGen f n fm@(And ps)        = do press <- mapM (toFormGen f n) ps
+                                      return $ bigAnd press
+toFormGen f n fm@(Or ps)         = do press <- mapM (toFormGen f n) ps
+                                      return $ bigOr press
+toFormGen f n fm@(p `Imp` q)     = do pres <- toFormGen f n p
                                       qres <- toFormGen f n q
-                                      return $ (dioAtom fm) `Iff` (pres `Imp` qres)
-toFormGen f n fm@(p `Iff` q)     = maybeComputeForm fm $
-                                   do pres <- toFormGen f n p
+                                      return $ pres `Imp` qres
+toFormGen f n fm@(p `Iff` q)     = do pres <- toFormGen f n p
                                       qres <- toFormGen f n q
-                                      return $ (dioAtom fm) `Iff` (pres `Iff` qres)
-toFormGen f n fm@(Ite p q r)     = maybeComputeForm fm $
-                                   do pres <- toFormGen f n p
+                                      return $ pres `Iff` qres
+toFormGen f n fm@(Ite p q r)     = do pres <- toFormGen f n p
                                       qres <- toFormGen f n q
                                       rres <- toFormGen f n r
-                                      return $ (dioAtom fm) `Iff` (Ite pres qres rres)
-toFormGen f n fm@(Neg p)         = maybeComputeForm fm $
-                                   do pres <- toFormGen f n p
-                                      return $ (dioAtom fm) `Iff` (Neg pres)
+                                      return $ Ite pres qres rres
+toFormGen f n fm@(Neg p)         = do pres <- toFormGen f n p
+                                      return $ Neg pres
 toFormGen _ _ Top                = return Top
 toFormGen _ _ Bot                = return Bot
 
-toFormulaGen :: DioAtomClass a => (Size -> DioFormula a -> DioSetMonad a PropositionalFormula) -> Size -> DioFormula a -> PropositionalFormula
-toFormulaGen f n phi = fst mainResult &&& bigAnd (Set.map (varRestrict n) (vars (snd mainResult)))
-                       where varRestrict n v = atom $ (natToPoly . (+ 1) . bound) n `Grt` varToPoly v
+toFormulaGen :: DioVarClass a => (Size -> DioFormula a -> DioSetMonad a PropositionalFormula) -> Size -> DioFormula a -> PropositionalFormula
+toFormulaGen f n phi = {-# SCC "toFormulaGen" #-} fst mainResult && varRestricts && extraForms
+                       where varRestricts    = bigAnd (Set.map (varRestrict n) (vars (snd mainResult)))
+                             extraForms      = (bigAnd . concat . Set.elems . formulas . snd) mainResult
+                             varRestrict n v = atom $ (natToPoly . (+ 1) . bound) n `Grt` varToPoly v
                              mainResult      = State.runState (f n phi) emptySt
 
--- toFormulaSimp :: DioAtomClass a => Size -> DioFormula a -> PropositionalFormula
+-- toFormulaSimp :: DioVarClass a => Size -> DioFormula a -> PropositionalFormula
 -- -- ^ translates a Diophantine constraint into a propositional formula,
 -- --   where variables are instantiated by values between 0 and n.
 -- toFormulaSimp = toFormulaGen toFormulaSimp'
 --
--- toFormulaSimp' :: DioAtomClass a => Size -> DioFormula a -> DioSetMonad a PropositionalFormula
+-- toFormulaSimp' :: DioVarClass a => Size -> DioFormula a -> DioSetMonad a PropositionalFormula
 -- toFormulaSimp' = toFormGen polyToNatSimp
 --
--- polyToNatSimp :: DioAtomClass a => Size -> DioPoly a -> DioSetMonad a NatFormula
+-- polyToNatSimp :: DioVarClass a => Size -> DioPoly a -> DioSetMonad a NatFormula
 -- polyToNatSimp n = pairEmpty . truncBots . bigPlus . map (monoToNatSimp n)
 --                   where pairEmpty x = (x, Set.empty)
 --
--- monoToNatSimp :: DioAtomClass a => Size -> DioMono a -> NatFormula
+-- monoToNatSimp :: DioVarClass a => Size -> DioMono a -> NatFormula
 -- monoToNatSimp n (DioMono m vp) = truncBots $ natToFormula m .*. (bigTimes . map (powerToNatSimp n)) vp
 --
--- powerToNatSimp :: DioAtomClass a => Size -> VPower a -> NatFormula
+-- powerToNatSimp :: DioVarClass a => Size -> VPower a -> NatFormula
 -- powerToNatSimp n (VPower v m) | m > 0     = natAtom n v .*. powerToNatSimp n (VPower v (m - 1))
 --                               | otherwise = [Top]
 
 -- Optimisation c of Section 5 in the Fuhs-et-al paper
 -- prunes all "numbers" to their maximum length based on
 -- the assumption that the value of all variables is at most n
-toFormula :: DioAtomClass a => Size -> DioFormula a -> PropositionalFormula
+toFormula :: DioVarClass a => Size -> DioFormula a -> PropositionalFormula
 -- ^ translates a Diophantine constraint into a propositional formula,
 --   where variables are instantiated by values between 0 and n.
 --   this function tracks the maximum value of all subformulas.
@@ -216,27 +213,33 @@ toFormula :: DioAtomClass a => Size -> DioFormula a -> PropositionalFormula
 --   maximum values
 toFormula = toFormulaGen toFormula'
 
-toFormula' :: DioAtomClass a => Size -> DioFormula a -> DioSetMonad a PropositionalFormula
-toFormula' = toFormGen polyToNat
+toFormula' :: DioVarClass a => Size -> DioFormula a -> DioSetMonad a PropositionalFormula
+toFormula' = {-# SCC "toFormula'" #-} toFormGen polyToNat
 
-polyToNat :: DioAtomClass a => Size -> DioPoly a -> DioSetMonad a NatFormula
-polyToNat n xs = maybeComputePoly newmax xs $
+polyToNat :: DioVarClass a => Size -> DioPoly a -> DioSetMonad a NatFormula
+polyToNat n xs = {-# SCC "polyToNat" #-} maybeComputePoly newmax xs $
                  do press <- mapM (monoToNat n) xs
-                    return $ zipWith Iff (polyAtom newmax xs) ((truncTo (bits newmax) . bigPlus) press)
-                      where newmax = polyBound n xs
+                    let newform = zipWith Iff (polyAtom newmax xs) ((truncTo (bits newmax) . bigPlus) press)
+                    s <- getForms
+                    setForms $ Set.insert newform s
+                    return $ polyAtom newmax xs
+                      where newmax  = polyBound n xs
 
-monoToNat :: DioAtomClass a => Size -> DioMono a -> DioSetMonad a NatFormula
-monoToNat n fm@(DioMono m vp) = maybeComputeMono newmax fm $
+monoToNat :: DioVarClass a => Size -> DioMono a -> DioSetMonad a NatFormula
+monoToNat n fm@(DioMono m vp) = {-# SCC "monoToNat" #-} maybeComputeMono newmax fm $
                                 do press <- mapM (powerToNat n) vp
-                                   return $ zipWith Iff (monoAtom newmax fm) (multres press)
+                                   let newform = zipWith Iff (monoAtom newmax fm) (multres press)
+                                   s <- getForms
+                                   setForms $ Set.insert newform s
+                                   return $ monoAtom newmax fm
                                 where multres ps = (truncTo (bits newmax) . bigTimes) (natToFormula m : ps)
                                       newmax     = monoBound n fm
 
-powerToNat :: DioAtomClass a => Size -> VPower a -> DioSetMonad a NatFormula
-powerToNat n (VPower v m) | m > 0     = do s <- getVars
-                                           setVars (Set.insert v s)
-                                           return $ bigTimes (replicate m (natAtom n v))
-                          | otherwise = return [Top]
+powerToNat :: DioVarClass a => Size -> VPower a -> DioSetMonad a NatFormula
+powerToNat n (VPower v m) | m > 0     = {-# SCC "powerToNat" #-} do s <- getVars
+                                                                    setVars (Set.insert v s)
+                                                                    return $ bigTimes (replicate m (natAtom n v))
+                          | otherwise = {-# SCC "powerToNatBase" #-} return [Top]
 
 polyBound :: Size -> DioPoly a -> Size
 polyBound n = Bound . sum . map (bound . (monoBound n))

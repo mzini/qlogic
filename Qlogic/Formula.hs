@@ -88,7 +88,7 @@ data Formula a = A a
                | Top
                | Bot deriving (Eq, Ord, Typeable, Show)
 
-class Boolean a where
+class Eq a => Boolean a where
   (&&) :: a -> a -> a
   (||) :: a -> a -> a
   not :: a -> a
@@ -106,7 +106,7 @@ instance Boolean Bool where
   true = True
   false = False
 
-instance Boolean (Formula a) where
+instance Eq a => Boolean (Formula a) where
   (&&) = (&&&)
   (||) = (|||)
   not = neg
@@ -146,7 +146,7 @@ atoms (Neg a)     = atoms a
 atoms Top         = Set.empty
 atoms Bot         = Set.empty
 
-simplify :: Formula a -> Formula a
+simplify :: Eq a => Formula a -> Formula a
 -- ^ performs basic simplification of formulas
 simplify (And l)     = bigAnd [simplify e | e <- l]
 simplify (Or l)      = bigAnd [simplify e | e <- l]
@@ -155,39 +155,50 @@ simplify (a `Imp` b) = simplify a --> simplify b
 simplify (Neg a)     = neg $ simplify a
 simplify a           = a
 
-(&&&) :: Formula a -> Formula a -> Formula a
+(&&&) :: Eq a => Formula a -> Formula a -> Formula a
 -- ^conjunction
 Top      &&& b        = b
 Bot      &&& _        = Bot
 a        &&& Top      = a
 _        &&& Bot      = Bot
 (And l1) &&& (And l2) = And $ l1 ++ l2
-a        &&& b        = And [a,b]
+(And l1) &&& b        = And $ l1 ++ [b]
+a        &&& (And l2) = And $ a:l2
+a        &&& (Neg b)  | a == b    = Bot
+a        &&& b        | a == b    = a
+a        &&& b        | otherwise = And [a,b]
 
-(|||) :: Formula a -> Formula a -> Formula a
+(|||) :: Eq a => Formula a -> Formula a -> Formula a
 -- ^disjunction
 Top     ||| _       = Top
 Bot     ||| b       = b
 _       ||| Top     = Top
 a       ||| Bot     = a
 (Or l1) ||| (Or l2) = Or $ l1 ++ l2
-a       ||| b       = Or [a,b]
+(Or l1) ||| b       = Or $ l1 ++ [b]
+a       ||| (Neg b) | a == b    = Top
+a       ||| b       | a == b    = a
+a       ||| b       | otherwise = Or [a,b]
 
-(<->) :: Formula a -> Formula a -> Formula a
+(<->) :: Eq a => Formula a -> Formula a -> Formula a
 -- ^if and only if
 Top <-> b   = b
 Bot <-> b   = neg b
 a   <-> Top = a
 a   <-> Bot = neg a
-a   <-> b   = a `Iff` b
+a   <-> (Neg b)  | a == b    = Bot
+a   <-> b        | a == b    = Top
+a   <-> b        | otherwise = a `Iff` b
 
-(-->) :: Formula a -> Formula a -> Formula a
+(-->) :: Eq a => Formula a -> Formula a -> Formula a
 -- ^implication
 Top --> b   = b
 Bot --> _   = Top
 _   --> Top = Top
 a   --> Bot = neg a
-a   --> b   = a `Imp` b
+a   --> (Neg b) | a == b    = Bot
+a   --> b       | a == b    = Top
+a   --> b       | otherwise = a `Imp` b
 
 neg :: Formula a -> Formula a
 -- ^negation
@@ -208,32 +219,32 @@ atom :: PropositionalAtomClass a => a -> PropositionalFormula
 -- ^ lift an atom to a formula
 atom = A . PropositionalAtom
 
-oneOrThree :: Formula a -> Formula a -> Formula a -> Formula a
+oneOrThree :: Eq a => Formula a -> Formula a -> Formula a -> Formula a
 -- ^ demands that exacly one or all three formulas hold
 oneOrThree p q r = p <-> q <-> r
 
-twoOrThree :: Formula a -> Formula a -> Formula a -> Formula a
+twoOrThree :: Formula -> Formula -> Formula -> Formula
 -- ^ demands that exacly two or all three formulas hold.
 twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
 
-forall :: Foldable t => t a -> (a -> Formula b) -> Formula b
+forall :: (Eq a, Eq b, Foldable t) => t a -> (a -> Formula b) -> Formula b
 forall xs f = foldr (\ x fm -> f x &&& fm) top xs 
 
-exist :: Foldable t => t a -> (a -> Formula b) -> Formula b
+exist :: (Eq a, Eq b, Foldable t) => t a -> (a -> Formula b) -> Formula b
 exist xs f = foldr (\ x fm -> f x ||| fm) bot xs 
 
-ite :: Formula a -> Formula a -> Formula a -> Formula a
+ite :: Eq a => Formula a -> Formula a -> Formula a -> Formula a
 ite Top t       _ = t
 ite Bot _       e = e
 ite g   Bot     e = neg g &&& e
 ite g   t   Bot   = g &&& t
 ite g       t   e = Ite g t e
 
-exactlyOne :: [Formula a] -> Formula a
+exactlyOne :: Eq a => [Formula a] -> Formula a
 exactlyOne []     = Bot
 exactlyOne (x:xs) = ite x (exactlyNone xs) (exactlyOne xs)
 
-exactlyNone  :: [Formula a] -> Formula a
+exactlyNone  :: Eq a => [Formula a] -> Formula a
 exactlyNone xs = forall xs neg
 
 atmostOne :: Eq a => [Formula a] -> Formula a

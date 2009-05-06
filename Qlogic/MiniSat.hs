@@ -114,7 +114,7 @@ ifM mc mt me = do c <- mc
                   if c then mt else me
 
 value :: (Decoder e a) => MiniSat () -> e -> IO (Maybe e)
-value m p = run $ m >> ifM (lift $ Sat.solve []) (Just `liftM` constructValue p) (return Nothing)
+value m p = {-# SCC "SAT" #-} run $ m >> ifM (lift $ Sat.solve []) (Just `liftM` constructValue p) (return Nothing)
 
 
 
