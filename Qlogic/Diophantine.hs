@@ -163,16 +163,16 @@ toFormGen f n fm@(Or ps)         = do press <- mapM (toFormGen f n) ps
                                       return $ bigOr press
 toFormGen f n fm@(p `Imp` q)     = do pres <- toFormGen f n p
                                       qres <- toFormGen f n q
-                                      return $ pres `Imp` qres
+                                      return $ pres --> qres
 toFormGen f n fm@(p `Iff` q)     = do pres <- toFormGen f n p
                                       qres <- toFormGen f n q
-                                      return $ pres `Iff` qres
+                                      return $ pres <-> qres
 toFormGen f n fm@(Ite p q r)     = do pres <- toFormGen f n p
                                       qres <- toFormGen f n q
                                       rres <- toFormGen f n r
-                                      return $ Ite pres qres rres
+                                      return $ ite pres qres rres
 toFormGen f n fm@(Neg p)         = do pres <- toFormGen f n p
-                                      return $ Neg pres
+                                      return $ neg pres
 toFormGen _ _ Top                = return Top
 toFormGen _ _ Bot                = return Bot
 
@@ -180,7 +180,7 @@ toFormulaGen :: DioVarClass a => (Size -> DioFormula a -> DioSetMonad a Proposit
 toFormulaGen f n phi = {-# SCC "toFormulaGen" #-} fst mainResult && varRestricts && extraForms
                        where varRestricts    = bigAnd (Set.map (varRestrict n) (vars (snd mainResult)))
                              extraForms      = (bigAnd . concat . Set.elems . formulas . snd) mainResult
-                             varRestrict n v = atom $ (natToPoly . (+ 1) . bound) n `Grt` varToPoly v
+                             varRestrict n v = (natToFormula . (+ 1) . bound) n .>. natAtom n v
                              mainResult      = State.runState (f n phi) emptySt
 
 -- toFormulaSimp :: DioVarClass a => Size -> DioFormula a -> PropositionalFormula
@@ -219,7 +219,7 @@ toFormula' = {-# SCC "toFormula'" #-} toFormGen polyToNat
 polyToNat :: DioVarClass a => Size -> DioPoly a -> DioSetMonad a NatFormula
 polyToNat n xs = {-# SCC "polyToNat" #-} maybeComputePoly newmax xs $
                  do press <- mapM (monoToNat n) xs
-                    let newform = zipWith Iff (polyAtom newmax xs) ((truncTo (bits newmax) . bigPlus) press)
+                    let newform = zipWith (<->) (polyAtom newmax xs) ((truncTo (bits newmax) . bigPlus) press)
                     s <- getForms
                     setForms $ Set.insert newform s
                     return $ polyAtom newmax xs
@@ -228,7 +228,7 @@ polyToNat n xs = {-# SCC "polyToNat" #-} maybeComputePoly newmax xs $
 monoToNat :: DioVarClass a => Size -> DioMono a -> DioSetMonad a NatFormula
 monoToNat n fm@(DioMono m vp) = {-# SCC "monoToNat" #-} maybeComputeMono newmax fm $
                                 do press <- mapM (powerToNat n) vp
-                                   let newform = zipWith Iff (monoAtom newmax fm) (multres press)
+                                   let newform = zipWith (<->) (monoAtom newmax fm) (multres press)
                                    s <- getForms
                                    setForms $ Set.insert newform s
                                    return $ monoAtom newmax fm
@@ -280,9 +280,10 @@ simplify = shallowSimp . map simpMono
 shallowSimp :: Eq a => DioPoly a -> DioPoly a
 shallowSimp [] = []
 shallowSimp ((DioMono n xs):ms) | n == 0    = shallowSimp ms
-shallowSimp ((DioMono n xs):ms) | otherwise = (DioMono (foldr addcoeff n (fst ys)) xs):(shallowSimp (snd ys))
-                                  where ys                      = List.partition (\(DioMono _ xs') -> xs == xs') ms
-                                        addcoeff (DioMono x _) y = x + y
+-- AS: TODO: Null-Fall in addcoeff
+shallowSimp ((DioMono n xs):ms) | otherwise = (DioMono (foldl addcoeff n (fst ys)) xs):(shallowSimp (snd ys))
+                                  where ys                       = List.partition (\(DioMono _ xs') -> xs == xs') ms
+                                        addcoeff x (DioMono y _) = x + y
 
 simpMono :: Eq a => DioMono a -> DioMono a
 simpMono (DioMono n xs) = DioMono n (simpPower xs)
@@ -290,6 +291,7 @@ simpMono (DioMono n xs) = DioMono n (simpPower xs)
 simpPower :: Eq a => [VPower a] -> [VPower a]
 simpPower [] = []
 simpPower ((VPower v n):xs) | n == 0    = simpPower xs
-simpPower ((VPower v n):xs) | otherwise = (VPower v (foldr addpow n (fst ys))):(simpPower (snd ys))
+-- AS: TODO: Null-Fall in addpow
+simpPower ((VPower v n):xs) | otherwise = (VPower v (foldl addpow n (fst ys))):(simpPower (snd ys))
                                           where ys                    = List.partition (\(VPower w _) -> v == w) xs
-                                                addpow (VPower _ y) x = y + x
+                                                addpow x (VPower _ y) = x + y
