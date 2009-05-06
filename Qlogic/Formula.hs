@@ -223,7 +223,7 @@ oneOrThree :: Eq a => Formula a -> Formula a -> Formula a -> Formula a
 -- ^ demands that exacly one or all three formulas hold
 oneOrThree p q r = p <-> q <-> r
 
-twoOrThree :: Formula -> Formula -> Formula -> Formula
+twoOrThree :: Eq a => Formula a -> Formula a -> Formula a -> Formula a
 -- ^ demands that exacly two or all three formulas hold.
 twoOrThree p q r = (p ||| q) &&& (p ||| r) &&& (q ||| r)
 
