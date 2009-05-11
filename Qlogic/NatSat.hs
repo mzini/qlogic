@@ -112,14 +112,20 @@ ps .+. qs | lengthdiff > 0 = padBots lengthdiff ps .+. qs
 
 mAdd :: NatFormula -> NatFormula -> NatSetMonad NatFormula
 mAdd [] []                  = return []
-mAdd [p] [q]                = return [p &&& q, neg (p <-> q)]
+mAdd [p] [q]                = do let c = atom (PLVec ([p], [q], False) 1)
+                                 let cc = (p &&& q) <-> c
+                                 State.modify $ Set.insert cc
+                                 return [c, neg (p <-> q)]
 mAdd ps qs | lengthdiff > 0 = mAdd (padBots lengthdiff ps) qs
            | lengthdiff < 0 = mAdd ps $ padBots (-1 * lengthdiff) qs
-           | otherwise      = do rs' <- mAdd (tail ps) (tail qs)
-                                 let rs = map (atom . PLVec (ps, qs)) [1..length rs']
+           | otherwise      = do rs <- mAdd (tail ps) (tail qs)
+                                 -- let rs = map (atom . PLVec (ps, qs)) [1..length rs']
                                  let r = head rs
-                                 State.modify (`Set.union` (Set.fromList (zipWith (<->) rs rs')))
-                                 return $ twoOrThree p q r : oneOrThree p q r : tail rs
+                                 let c = atom (PLVec ([p], [q]) 1)
+                                 let cc = (twoOrThree p q r) <-> c
+                                 State.modify $ Set.insert cc
+                                 -- State.modify (`Set.union` (Set.fromList (zipWith (<->) rs rs')))
+                                 return $ c : oneOrThree p q r : tail rs
   where lengthdiff = length qs - length ps
         p          = head ps
         q          = head qs
@@ -141,13 +147,17 @@ ps .*. (q:qs) = r1 .+. r2
 mTimes :: NatFormula -> NatFormula -> NatSetMonad NatFormula
 mTimes _ []      = return []
 mTimes ps [q]    = return $ map (&&& q) ps
-mTimes ps (q:qs) = do let r1' = map (&&& q) ps ++ padBots (length qs) []
-                      r2' <- mTimes ps qs
-                      let r1 = map (atom . PLVec (ps, qs, True)) [1..length r1']
-                      let r2 = map (atom . PLVec (ps, qs, False)) [1..length r2']
-                      State.modify (`Set.union` (Set.fromList (zipWith (<->) r1 r1')))
-                      State.modify (`Set.union` (Set.fromList (zipWith (<->) r2 r2')))
-                      mAdd r1 r2
+mTimes [p] qs    = return $ map (p &&&) qs
+mTimes ps (q:qs) = do let r1 = map (&&& q) ps ++ padBots (length qs) []
+                      r2 <- mTimes ps qs
+                      -- let r1 = map (atom . PLVec (ps, qs, True)) [1..length r1']
+                      -- let r2 = map (atom . PLVec (ps, qs, False)) [1..length r2']
+                      -- State.modify (`Set.union` (Set.fromList (zipWith (<->) r1 r1')))
+                      -- State.modify (`Set.union` (Set.fromList (zipWith (<->) r2 r2')))
+                      addres <- mAdd r1 r2
+                      let vs = map (atom . PLVec (ps, qs, True)) [1..length addres]
+                      State.modify (`Set.union` (Set.fromList (zipWith (<->) vs addres)))
+                      return vs
 
 bigTimes :: [NatFormula] -> NatFormula
 -- ^ calculates the product of a list of natural numbers in their representation

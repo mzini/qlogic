@@ -153,3 +153,19 @@ transformMinus Bot            = maybeComputeNeg Bot $ return Cnf.top
 
 transform :: PropositionalFormula -> CNF PropositionalAtom
 transform fm = toCnf [[lit fm]] +&+ State.evalState (transformPlus fm) St{posSet = Set.empty, negSet = Set.empty}
+  -- where splitAnd (a `And` b) = splitAnd a ++ splitAnd b
+  --       splitAnd fm'          = [fm']
+
+-- size decreasing simplification
+-- simplify :: Formula a -> Formula a
+-- simplify ((Neg a) `Or` b) = a `Imp` b
+-- simplify (a `Or` (Neg b)) = b `Imp` a
+-- simplify (Neg  (Neg a))   = a
+-- simplify (Neg  ((Neg a) `And` (Neg b)))   = a `Or` b
+-- simplify (Neg  ((Neg a) `Or` (Neg b)))   = a `And` b
+-- simplify _ = undefined  -- TODO finish
+
+-- baseAssignment :: Assign (ExtendedAtom Atm) -> Assign
+-- baseAssignment = fromMap . Map.foldWithKey f empty . toMap
+--   where f (V x) e = Map.insert x e 
+--         f _ _     = id

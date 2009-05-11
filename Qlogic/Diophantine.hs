@@ -278,13 +278,13 @@ powerToNat n fm@(VPower v m) | m > 0  = {-# SCC "powerToNat" #-} maybeComputePow
 powerToNat n (VPower v m) | otherwise = {-# SCC "powerToNatBase" #-} return [Top]
 
 polyBound :: Size -> DioPoly a -> Size
-polyBound n = Bound . sum . map (bound . (monoBound n))
+polyBound n = {-# SCC "polyBound" #-} Bound . sum . map (bound . (monoBound n))
 
 monoBound :: Size -> DioMono a -> Size
-monoBound n (DioMono m xs) = Bound $ foldr ((*) . bound . powerBound n) m xs
+monoBound n (DioMono m xs) = {-# SCC "monoBound" #-} Bound $ foldr ((*) . bound . powerBound n) m xs
 
 powerBound :: Size -> VPower a -> Size
-powerBound n (VPower _ m) = Bound $ (bound n) ^ m
+powerBound n (VPower _ m) = {-# SCC "powerBound" #-} Bound $ (bound n) ^ m
 
 natToPoly :: Int -> DioPoly a
 natToPoly n = [DioMono n []]
@@ -317,7 +317,7 @@ shallowSimp :: Eq a => DioPoly a -> DioPoly a
 shallowSimp [] = []
 shallowSimp ((DioMono n xs):ms) | n == 0    = shallowSimp ms
 -- AS: TODO: Null-Fall in addcoeff
-shallowSimp ((DioMono n xs):ms) | otherwise = (DioMono (foldl addcoeff n (fst ys)) xs):(shallowSimp (snd ys))
+shallowSimp ((DioMono n xs):ms) | otherwise = {-# SCC "shallowSimp" #-} (DioMono (foldl addcoeff n (fst ys)) xs):(shallowSimp (snd ys))
                                   where ys                       = List.partition (\(DioMono _ xs') -> xs == xs') ms
                                         addcoeff x (DioMono y _) = x + y
 
@@ -328,6 +328,6 @@ simpPower :: Eq a => [VPower a] -> [VPower a]
 simpPower [] = []
 simpPower ((VPower v n):xs) | n == 0    = simpPower xs
 -- AS: TODO: Null-Fall in addpow
-simpPower ((VPower v n):xs) | otherwise = (VPower v (foldl addpow n (fst ys))):(simpPower (snd ys))
+simpPower ((VPower v n):xs) | otherwise = {-# SCC "simpPower" #-} (VPower v (foldl addpow n (fst ys))):(simpPower (snd ys))
                                           where ys                    = List.partition (\(VPower w _) -> v == w) xs
                                                 addpow x (VPower _ y) = x + y
