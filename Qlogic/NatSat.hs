@@ -16,8 +16,10 @@ module Qlogic.NatSat
   , bitsToNat
   , bits
   , bound
+  , mAdd
   , (.+.)
   , bigPlus
+  , mTimes
   , (.*.)
   , bigTimes
   , (.>.)
@@ -27,10 +29,12 @@ module Qlogic.NatSat
   , eval
   ) where
 
+import qualified Control.Monad.State.Lazy as State
 import Qlogic.Formula
 import qualified Qlogic.Assign as A
 import qualified Data.List as List
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Data.Typeable
 
 data Size = Bits Int
@@ -59,6 +63,8 @@ data PLVec a = PLVec a Int
 instance (Eq a, Ord a, Show a, Typeable a) => PropositionalAtomClass (PLVec a)
 
 type NatAssign a = Map.Map a Int
+
+type NatSetMonad r = State.State (Set.Set PropositionalFormula) r
 
 emptyAssignment :: NatAssign a
 emptyAssignment = Map.empty
@@ -104,6 +110,20 @@ ps .+. qs | lengthdiff > 0 = padBots lengthdiff ps .+. qs
         q          = head qs
         r          = head rs
 
+mAdd :: NatFormula -> NatFormula -> NatSetMonad NatFormula
+mAdd [] []                  = return []
+mAdd [p] [q]                = return [p &&& q, neg (p <-> q)]
+mAdd ps qs | lengthdiff > 0 = mAdd (padBots lengthdiff ps) qs
+           | lengthdiff < 0 = mAdd ps $ padBots (-1 * lengthdiff) qs
+           | otherwise      = do rs' <- mAdd (tail ps) (tail qs)
+                                 let rs = map (atom . PLVec (ps, qs)) [1..length rs']
+                                 let r = head rs
+                                 State.modify (`Set.union` (Set.fromList (zipWith (<->) rs rs')))
+                                 return $ twoOrThree p q r : oneOrThree p q r : tail rs
+  where lengthdiff = length qs - length ps
+        p          = head ps
+        q          = head qs
+
 bigPlus :: [NatFormula] -> NatFormula
 -- ^ calculates the sum of a list of natural numbers in their representation
 --   as lists of propositional formulas
@@ -117,6 +137,17 @@ ps .*. [q]    = map (&&& q) ps
 ps .*. (q:qs) = r1 .+. r2
   where r1 = map (&&& q) ps ++ padBots (length qs) []
         r2 = ps .*. qs
+
+mTimes :: NatFormula -> NatFormula -> NatSetMonad NatFormula
+mTimes _ []      = return []
+mTimes ps [q]    = return $ map (&&& q) ps
+mTimes ps (q:qs) = do let r1' = map (&&& q) ps ++ padBots (length qs) []
+                      r2' <- mTimes ps qs
+                      let r1 = map (atom . PLVec (ps, qs, True)) [1..length r1']
+                      let r2 = map (atom . PLVec (ps, qs, False)) [1..length r2']
+                      State.modify (`Set.union` (Set.fromList (zipWith (<->) r1 r1')))
+                      State.modify (`Set.union` (Set.fromList (zipWith (<->) r2 r2')))
+                      mAdd r1 r2
 
 bigTimes :: [NatFormula] -> NatFormula
 -- ^ calculates the product of a list of natural numbers in their representation

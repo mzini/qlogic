@@ -93,7 +93,7 @@ fromFormula :: Formula a -> CNF a
 -- ^ translate a 'Formula' into a 'CNF' with the possibly exponential textbook algorithm
 fromFormula = cnf . nnf . implFree
 
-implFree (a `Imp` b) = Neg $ Or [implFree a, implFree b]
+implFree (a `Imp` b) = Or [Neg $ implFree a, implFree b]
 implFree (Ite g t e) = And $ [implFree $ g `Imp` t,  implFree $ (Neg g) `Imp` e]
 implFree (Or l)      = Or [implFree e | e <- l]
 implFree (And l)     = And [implFree e | e <- l]
