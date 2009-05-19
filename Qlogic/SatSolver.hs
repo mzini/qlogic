@@ -3,7 +3,9 @@
 module Qlogic.SatSolver where
 
 import qualified Control.Monad.State.Lazy as State
+import qualified Data.Map as Map
 
+import Qlogic.Formula
 import qualified Sat as Sat
 
 newtype Clause l = Clause {clauseToList :: [l]}
@@ -28,7 +30,17 @@ class Solver s l => IncrementalSolver s l where
     okay :: s () -> s Bool
 
 
--- type SatSolver s r = State.StateT AtomMap s r
+data ExtLit l = Lit l | TopLit | BotLit
+
+data  StateElt l = StateElt { inPos :: Bool, inNeg :: Bool, lit :: ExtLit l }
+type SolverState l = Map.Map PropositionalAtom (StateElt l)
+type SatSolver s l r = State.StateT (SolverState l) s r
+
+addPositively :: PropositionalFormula -> SatSolver s l l
+addPositively = undefined
+
+addNegatively :: PropositionalFormula -> SatSolver s l l
+addNegatively = undefined
 
 
 -- value :: (Decoder e a) => SatSolver s () -> e -> IO (Maybe e)
