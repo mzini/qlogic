@@ -14,6 +14,7 @@ library
  exposed-modules:   Qlogic.Formula
                     Qlogic.Assign
                     Qlogic.MiniSat
+                    Qlogic.SatSolver
                     Qlogic.NatSat
                     Qlogic.Diophantine
                     Qlogic.Tseitin
