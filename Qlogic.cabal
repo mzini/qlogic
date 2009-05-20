@@ -13,11 +13,9 @@ build-type:	    Simple
 library
  exposed-modules:   Qlogic.Formula
                     Qlogic.Assign
-                    Qlogic.MiniSat
                     Qlogic.SatSolver
                     Qlogic.NatSat
                     Qlogic.Diophantine
-                    Qlogic.Tseitin
                     Qlogic.Cnf
 
  other-modules:     Sat
@@ -51,10 +49,9 @@ executable qlogic-test
 
  other-modules:     Qlogic.Formula
                     Qlogic.Assign
-                    Qlogic.MiniSat
+                    Qlogic.SatSolver
                     Qlogic.NatSat
                     Qlogic.Diophantine
-                    Qlogic.Tseitin
                     Qlogic.Cnf
                     Sat
                     Name
