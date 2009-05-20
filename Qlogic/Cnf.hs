@@ -10,6 +10,7 @@ module Qlogic.Cnf
   , clauseToList
   -- * Conjunctive Normal Forms
   , CNF
+  , size
   , top
   , bot
   , singleton
@@ -45,6 +46,11 @@ clause = Clause
 data CNF a = Empty
            | Singleton (Clause a)
            | CNF a :&: CNF a deriving Show
+
+size :: CNF a -> Int
+size Empty         = 0
+size (Singleton c) = length $ clauseToList c
+size (a :&: b)     = size a + size b
 
 isContradiction :: CNF a -> Bool
 isContradiction (Singleton (Clause [])) = True

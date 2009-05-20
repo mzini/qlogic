@@ -33,6 +33,7 @@ import Qlogic.NatSat
 import Qlogic.Formula hiding (simplify)
 import Control.Monad
 import qualified Control.Monad.State.Lazy as State
+import qualified Data.Map as Map
 import qualified Data.List as List
 import Data.Typeable
 import qualified Data.Set as Set
@@ -91,26 +92,26 @@ powerAtom n m = natAtom n $ A (PropositionalAtom m)
 
 data St a = St { vars :: Set.Set a
                , formulas :: Set.Set PropositionalFormula
-               , polys :: Set.Set (DioPoly a)
-               , monos :: Set.Set (DioMono a)
-               , powers :: Set.Set (VPower a)
+               , polys :: Map.Map (DioPoly a) NatFormula
+               , monos :: Map.Map (DioMono a) NatFormula
+               , powers :: Map.Map (VPower a) NatFormula
                }
 
 type DioSetMonad a r = State.State (St a) r
 
 emptySt :: St a
-emptySt = St{vars = Set.empty, formulas = Set.empty, polys = Set.empty, monos = Set.empty, powers = Set.empty}
+emptySt = St{vars = Set.empty, formulas = Set.empty, polys = Map.empty, monos = Map.empty, powers = Map.empty}
 
 getVars :: DioSetMonad a (Set.Set a)
 getForms :: DioSetMonad a (Set.Set PropositionalFormula)
-getPolys :: DioSetMonad a (Set.Set (DioPoly a))
-getMonos :: DioSetMonad a (Set.Set (DioMono a))
-getPowers :: DioSetMonad a (Set.Set (VPower a))
+getPolys :: DioSetMonad a (Map.Map (DioPoly a) NatFormula)
+getMonos :: DioSetMonad a (Map.Map (DioMono a) NatFormula)
+getPowers :: DioSetMonad a (Map.Map (VPower a) NatFormula)
 
 getVars = liftM vars State.get
 getForms = liftM formulas State.get
 getPolys = liftM polys State.get
-getMonos = {-# SCC "getMonos" #-} liftM monos State.get
+getMonos = liftM monos State.get
 getPowers = liftM powers State.get
 
 setVars :: Set.Set a -> DioSetMonad a ()
@@ -119,14 +120,14 @@ setVars set = State.modify $ \s -> s{vars = set}
 setForms :: Set.Set PropositionalFormula -> DioSetMonad a ()
 setForms set = State.modify $ \s -> s{formulas = set}
 
-setPolys :: Set.Set (DioPoly a) -> DioSetMonad a ()
-setPolys set = State.modify $ \s -> s{polys = set}
+setPolys :: Map.Map (DioPoly a) NatFormula -> DioSetMonad a ()
+setPolys tbl = State.modify $ \s -> s{polys = tbl}
 
-setMonos :: Set.Set (DioMono a) -> DioSetMonad a ()
-setMonos set = {-# SCC "setMonos" #-} State.modify $ \s -> s{monos = set}
+setMonos :: Map.Map (DioMono a) NatFormula -> DioSetMonad a ()
+setMonos tbl = State.modify $ \s -> s{monos = tbl}
 
-setPowers :: Set.Set (VPower a) -> DioSetMonad a ()
-setPowers set = State.modify $ \s -> s{powers = set}
+setPowers :: Map.Map (VPower a) NatFormula -> DioSetMonad a ()
+setPowers tbl = State.modify $ \s -> s{powers = tbl}
 
 -- maybeComputeForm :: PropositionalAtomClass a
 --                  => DioFormula a
@@ -145,9 +146,11 @@ maybeComputePoly :: PropositionalAtomClass a
                  -> DioSetMonad a NatFormula
 maybeComputePoly n fm m =
   do s <- getPolys
-     (if fm `Set.member` s
-      then return (polyAtom n fm)
-      else setPolys (Set.insert fm s) >> m)
+     (case Map.lookup fm s of
+        Just x  -> return x
+        Nothing -> do mres <- m
+                      setPolys (Map.insert fm mres s)
+                      return mres)
 
 maybeComputeMono :: PropositionalAtomClass a
                  => Size
@@ -155,10 +158,12 @@ maybeComputeMono :: PropositionalAtomClass a
                  -> DioSetMonad a NatFormula
                  -> DioSetMonad a NatFormula
 maybeComputeMono n fm m =
- {-# SCC "maybeComputeMono" #-} do s <- getMonos
-                                   (if {-# SCC "setmem" #-} fm `Set.member` s
-                                    then return (monoAtom n fm)
-                                    else setMonos (Set.insert fm s) >> m)
+  do s <- getMonos
+     (case Map.lookup fm s of
+        Just x  -> return x
+        Nothing -> do mres <- m
+                      setMonos (Map.insert fm mres s)
+                      return mres)
 
 maybeComputePower :: PropositionalAtomClass a
                   => Size
@@ -167,9 +172,11 @@ maybeComputePower :: PropositionalAtomClass a
                   -> DioSetMonad a NatFormula
 maybeComputePower n fm m =
   do s <- getPowers
-     (if fm `Set.member` s
-      then return (powerAtom n fm)
-      else setPowers (Set.insert fm s) >> m)
+     (case Map.lookup fm s of
+        Just x  -> return x
+        Nothing -> do mres <- m
+                      setPowers (Map.insert fm mres s)
+                      return mres)
 
 toFormGen :: DioVarClass a => (Size -> DioPoly a -> DioSetMonad a NatFormula) -> Size -> DioFormula a -> DioSetMonad a PropositionalFormula
 toFormGen f n fm@(A (p `Grt` q)) = do pres <- f n p
@@ -242,12 +249,13 @@ polyToNat n []        = return [Bot]
 polyToNat n fm@(x:xs) = {-# SCC "polyToNat" #-} maybeComputePoly newmax fm $
                         do pres <- monoToNat n x
                            qres <- polyToNat n xs
-                           let addres = State.runState (mAdd pres qres) Set.empty
-                           let newform = bigAnd $ zipWith (<->) (polyAtom newmax fm) (truncTo (bits newmax) (fst addres))
+                           let addres' = State.runState (mAdd pres qres) Set.empty
+                           let addres = truncTo (bits newmax) (fst addres')
+                           -- let newform = bigAnd $ zipWith (<->) (polyAtom newmax fm) addres
                            s <- getForms
-                           setForms $ snd addres `Set.union` Set.insert newform s
-                           return $ polyAtom newmax fm
-                        where newmax  = polyBound n fm
+                           setForms $ snd addres' `Set.union` s -- Set.insert newform s
+                           return addres -- $ polyAtom newmax fm
+                        where newmax = polyBound n fm
 
 monoToNat :: DioVarClass a => Size -> DioMono a -> DioSetMonad a NatFormula
 monoToNat n (DioMono m [])          = return $ natToFormula m
@@ -256,10 +264,10 @@ monoToNat n fm@(DioMono m (vp:vps)) = {-# SCC "monoToNat" #-} maybeComputeMono n
                                          qres <- monoToNat n (DioMono m vps)
                                          let multres' = State.runState (mTimes pres qres) Set.empty
                                          let multres = truncTo (bits newmax) $ fst multres'
-                                         let newform = bigAnd $ zipWith (<->) (monoAtom newmax fm) multres
+                                         -- let newform = bigAnd $ zipWith (<->) (monoAtom newmax fm) multres
                                          s <- getForms
-                                         setForms $ snd multres' `Set.union` Set.insert newform s
-                                         return $ monoAtom newmax fm
+                                         setForms $ snd multres' `Set.union` s -- Set.insert newform s
+                                         return multres -- $ monoAtom newmax fm
                                       where newmax = monoBound n fm
 
 powerToNat :: DioVarClass a => Size -> VPower a -> DioSetMonad a NatFormula
@@ -270,10 +278,10 @@ powerToNat n fm@(VPower v m) | m > 0  = {-# SCC "powerToNat" #-} maybeComputePow
                                            qres <- powerToNat n (VPower v (pred m))
                                            let multres' = State.runState (mTimes pres qres) Set.empty
                                            let multres = truncTo (bits newmax) $ fst multres'
-                                           let newform = bigAnd $ zipWith (<->) (powerAtom newmax fm) multres
+                                           -- let newform = bigAnd $ zipWith (<->) (powerAtom newmax fm) multres
                                            s <- getForms
-                                           setForms $ snd multres' `Set.union` Set.insert newform s
-                                           return $ powerAtom newmax fm
+                                           setForms $ snd multres' `Set.union` s -- Set.insert newform s
+                                           return multres -- $ powerAtom newmax fm
                                         where newmax        = powerBound n fm
 powerToNat n (VPower v m) | otherwise = {-# SCC "powerToNatBase" #-} return [Top]
 

@@ -12,6 +12,7 @@ module Qlogic.Formula
   , PropositionalFormula
   , Boolean(..)
   -- * operations
+  , size
   , simplify
   , atoms
   -- ** standard Boolean connectives, simplifying
@@ -116,6 +117,17 @@ instance Eq a => Boolean (Formula a) where
 instance PropositionalAtomClass a => PropositionalAtomClass (Formula a)
 
 type PropositionalFormula = Formula PropositionalAtom
+
+size :: Formula a -> Int
+size (A a)       = 1
+size (And xs)    = 1 + Prelude.sum (map size xs)
+size (Or xs)     = 1 + Prelude.sum (map size xs)
+size (Iff a b)   = size a + size b + 1
+size (Ite a b c) = size a + size b + size c + 1
+size (Imp a b)   = size a + size b + 1
+size (Neg a)     = size a + 1
+size Top         = 1
+size Bot         = 1
 
 pprintPropositionalAtom :: Show a => a -> Doc
 pprintPropositionalAtom = text . show

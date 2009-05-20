@@ -146,8 +146,9 @@ ps .*. (q:qs) = r1 .+. r2
 
 mTimes :: NatFormula -> NatFormula -> NatSetMonad NatFormula
 mTimes _ []      = return []
-mTimes ps [q]    = return $ map (&&& q) ps
-mTimes [p] qs    = return $ map (p &&&) qs
+mTimes [] _      = return []
+mTimes ps [q]    = do return $ map (&&& q) ps
+mTimes [p] qs    = do return $ map (p &&&) qs
 mTimes ps (q:qs) = do let r1 = map (&&& q) ps ++ padBots (length qs) []
                       r2 <- mTimes ps qs
                       -- let r1 = map (atom . PLVec (ps, qs, True)) [1..length r1']

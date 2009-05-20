@@ -40,21 +40,35 @@ newLit :: MiniSat Sat.Lit
 newLit = lift Sat.newLit
 
 literal :: PropositionalAtom -> MiniSat Sat.Lit
-literal a = do literals <- State.get 
-               maybe (newLit >>= \ lit -> State.withStateT (Map.insert a lit) $ return lit)
-                     return $ Map.lookup a literals
+literal a = {-# SCC "literal" #-}
+  do n <- newLit
+     literals  <- State.get
+     case Map.insertLookupWithKey f a n literals of
+       (Nothing, m) -> State.modify (const m) >> return n
+       (Just b, _)  -> return b
+     where f key newV oldV = oldV
 
 getModelValue :: Sat.Lit -> MiniSat Bool
 getModelValue v = lift $ Sat.getModelValue v
 
 addClauses :: Cnf.CNF PropositionalAtom -> MiniSat ()
 addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
-               | otherwise               = Cnf.fold f (return ()) cnf
+               | otherwise               = {-# SCC "addClauses" #-} Cnf.fold f (return ()) cnf
   where f clause m = do mlits <- mapM mkLit $ Cnf.clauseToList clause
                         lift $ Sat.addClause mlits
                         m
         mkLit (PosLit l) = literal l
         mkLit (NegLit l) = Sat.neg `liftM` literal l
+
+-- addClauses :: Cnf.CNF CInt -> MiniSat ()
+-- addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
+--                | otherwise               = {-# SCC "addClauses" #-} Cnf.fold f (return ()) cnf
+--   where f clause m = do mlits <- mapM mkLit $ Cnf.clauseToList clause
+--                         lift $ Sat.addClause mlits
+--                         m
+--         mkLit (PosLit l) = altliteral l
+--         mkLit (NegLit l) = Sat.neg `liftM` altliteral l
+--         altliteral = undefined
 
 addFormula :: PropositionalFormula -> MiniSat ()
 addFormula fm = addClauses $ Tseitin.transform fm
@@ -114,7 +128,7 @@ ifM mc mt me = do c <- mc
                   if c then mt else me
 
 value :: (Decoder e a) => MiniSat () -> e -> IO (Maybe e)
-value m p = {-# SCC "SAT" #-} run $ m >> ifM (lift $ Sat.solve []) (Just `liftM` constructValue p) (return Nothing)
+value m p = run $ m >> ifM (lift $ {-# SCC "SAT" #-} Sat.solve []) (Just `liftM` constructValue p) (return Nothing)
 
 
 
