@@ -93,8 +93,7 @@ plit (Neg x) = nlit x
 plit fm      = alit $ lvar fm
 
 nlit :: (Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
-nlit fm = do l <- plit fm
-             negateLit l
+nlit fm = plit fm >>= negateLit
 
 negateLit :: (Monad s, Solver s l) => ExtLit l -> SatSolver s l (ExtLit l)
 negateLit (Lit x) = liftM Lit $ lift $ negate x
@@ -117,6 +116,7 @@ maybeCompute_ pol fm m =
   do s <- State.get
      let a = lvar fm
      case Map.lookup a s of
+-- TODO: AS: merge lookup+adjust
        Nothing  -> do theLit <- lift newLit
                       State.modify $ addAtom pol a (Lit theLit)
                       m
@@ -176,7 +176,7 @@ addPositively fm@(a `Imp` b) = {-# SCC "addPosImp" #-}
      bpos <- addPositively b
      addLitClause $ Clause [nfm, aneg, bpos]
      plit fm
-addPositively fm@(Neg a) = {-# SCC "addPosNeg" #-} maybeComputePos fm $ addNegatively a >>= negateLit
+addPositively fm@(Neg a) = {-# SCC "addPosNeg" #-} addNegatively a >>= negateLit
 addPositively fm@(A _) = {-# SCC "addPosAtom" #-} plit fm
 addPositively Top = {-# SCC "addPosTop" #-} return TopLit
 addPositively Bot = {-# SCC "addPosBot" #-} return BotLit
@@ -225,7 +225,7 @@ addNegatively fm@(a `Imp` b) = {-# SCC "addNegImp" #-}
      addLitClause $ Clause [pfm, apos]
      addLitClause $ Clause [pfm, bneg]
      return pfm
-addNegatively fm@(Neg a) = {-# SCC "addNegNeg" #-} maybeComputeNeg fm $ addPositively a >>= negateLit
+addNegatively fm@(Neg a) = {-# SCC "addNegNeg" #-} addPositively a >>= negateLit
 addNegatively fm@(A _) = {-# SCC "addNegAtom" #-} plit fm
 addNegatively Top = {-# SCC "addNegTop" #-} return TopLit
 addNegatively Bot = {-# SCC "addNegBot" #-} return BotLit
