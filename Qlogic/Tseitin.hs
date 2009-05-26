@@ -77,7 +77,7 @@ maybeCompute_  :: (PGSetMonad (Set.Set PropositionalFormula))
                -> PGSetMonad (CNF PropositionalAtom)
 maybeCompute_ getSet setSet fm m =
   do s <- getSet
-     (if {-# SCC "tseitinSetLookup" #-} fm `Set.member` s
+     (if fm `Set.member` s
       then return Cnf.top
       else setSet (Set.insert fm s) >> m)
 
@@ -86,22 +86,22 @@ maybeComputePos = maybeCompute_ getPSet setPSet
 maybeComputeNeg = maybeCompute_ getNSet setNSet
 
 transformPlus,transformMinus :: PropositionalFormula -> PGSetMonad (CNF PropositionalAtom)
-transformPlus fm@(And l) = {-# SCC "trposAnd" #-}
+transformPlus fm@(And l) =
   maybeComputePos fm $
   do cnfs <- mapM transformPlus l
      return $ toCnf [[nlit fm, lit e] | e <- l] +&+ fromCnfs cnfs
-transformPlus fm@(Or l) = {-# SCC "trposOr" #-}
+transformPlus fm@(Or l) =
   maybeComputePos fm $
   do cnfs <- mapM transformPlus l
      return $ toCnf [nlit fm : [lit e | e <- l]] +&+ fromCnfs cnfs
-transformPlus fm@(a `Iff` b) = {-# SCC "trposIff" #-}
+transformPlus fm@(a `Iff` b) =
   maybeComputePos fm $
   do cnfApos <- transformPlus a
      cnfAneg <- transformMinus a
      cnfBpos <- transformPlus b
      cnfBneg <- transformMinus b
      return $ toCnf [[nlit fm, nlit a, lit b], [nlit fm, lit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
-transformPlus fm@(Ite g t e) = {-# SCC "trposIte" #-}
+transformPlus fm@(Ite g t e) =
   maybeComputePos fm $
   do cnfGpos <- transformPlus g
      cnfGneg <- transformMinus g
@@ -109,47 +109,47 @@ transformPlus fm@(Ite g t e) = {-# SCC "trposIte" #-}
      cnfE <- transformPlus e
      return $ toCnf [[nlit fm, nlit g, lit t], [nlit fm, lit g, lit e]] +&+ cnfGpos +&+ cnfGneg +&+ cnfT +&+ cnfE
 
-transformPlus fm@(a `Imp` b) = {-# SCC "trposImp" #-}
+transformPlus fm@(a `Imp` b) =
   maybeComputePos fm $
   do cnfA <- transformMinus a
      cnfB <- transformPlus b
      return $ toCnf [[nlit fm, nlit a, lit b]] +&+ cnfA +&+ cnfB
-transformPlus fm@(Neg a)       = {-# SCC "trposNeg" #-} maybeComputePos fm $ transformMinus a
-transformPlus fm@(A _)       = {-# SCC "trposAtom" #-} return Cnf.top
-transformPlus Top              = {-# SCC "trposTop" #-} return Cnf.top
-transformPlus Bot              = {-# SCC "trposBot" #-} return Cnf.top
+transformPlus fm@(Neg a)       = maybeComputePos fm $ transformMinus a
+transformPlus fm@(A _)       = return Cnf.top
+transformPlus Top              = return Cnf.top
+transformPlus Bot              = return Cnf.top
 
-transformMinus fm@(And l) = {-# SCC "trminAnd" #-}
+transformMinus fm@(And l) =
   maybeComputeNeg fm $
   do cnfs <- mapM transformMinus l
      return $ toCnf [lit fm : [nlit e | e <- l]] +&+ fromCnfs cnfs
-transformMinus fm@(Or l) = {-# SCC "trminOr" #-}
+transformMinus fm@(Or l) =
   maybeComputeNeg fm $ 
   do cnfs <- mapM transformMinus l
      return $ toCnf [[nlit e, lit fm] | e <- l] +&+ fromCnfs cnfs
-transformMinus fm@(a `Iff` b) = {-# SCC "trminIff" #-}
+transformMinus fm@(a `Iff` b) =
   maybeComputeNeg fm $
   do cnfApos <- transformPlus a
      cnfAneg <- transformMinus a
      cnfBpos <- transformPlus b
      cnfBneg <- transformMinus b
      return $ toCnf [[lit fm, lit a, lit b], [lit fm, nlit a, nlit b]] +&+ cnfApos +&+ cnfBpos +&+ cnfAneg +&+ cnfBneg
-transformMinus fm@(a `Imp` b) = {-# SCC "trminImp" #-}
+transformMinus fm@(a `Imp` b) =
   maybeComputeNeg fm $
   do cnfA <- transformPlus a
      cnfB <- transformMinus b
      return $ toCnf [[lit fm, lit a], [lit fm, nlit b]] +&+ cnfA +&+ cnfB
-transformMinus fm@(Ite g t e) = {-# SCC "trminIte" #-}
+transformMinus fm@(Ite g t e) =
   maybeComputeNeg fm $
   do cnfGpos <- transformPlus g
      cnfGneg <- transformMinus g
      cnfTneg <- transformMinus t
      cnfEneg <- transformMinus e
      return $ toCnf [[lit fm, nlit t, nlit g], [lit fm, nlit e, lit g]] +&+ cnfGpos +&+ cnfGneg +&+ cnfTneg +&+ cnfEneg
-transformMinus fm@(Neg a)     = {-# SCC "trminNeg" #-} maybeComputeNeg fm $ transformPlus a
-transformMinus fm@(A _)     = {-# SCC "trminAtom" #-} return Cnf.top
-transformMinus Top            = {-# SCC "trminTop" #-} return Cnf.top
-transformMinus Bot            = {-# SCC "trminBot" #-} return Cnf.top
+transformMinus fm@(Neg a)     = maybeComputeNeg fm $ transformPlus a
+transformMinus fm@(A _)     = return Cnf.top
+transformMinus Top            = return Cnf.top
+transformMinus Bot            = return Cnf.top
 
 transform :: PropositionalFormula -> CNF PropositionalAtom
-transform fm = {-# SCC "Tseitin" #-} toCnf [[lit fm]] +&+ State.evalState (transformPlus fm) St{posSet = Set.empty, negSet = Set.empty}
+transform fm = toCnf [[lit fm]] +&+ State.evalState (transformPlus fm) St{posSet = Set.empty, negSet = Set.empty}

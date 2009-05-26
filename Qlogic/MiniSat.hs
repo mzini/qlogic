@@ -40,7 +40,7 @@ newLit :: MiniSat Sat.Lit
 newLit = lift Sat.newLit
 
 literal :: PropositionalAtom -> MiniSat Sat.Lit
-literal a = {-# SCC "literal" #-}
+literal a =
   do n <- newLit
      literals  <- State.get
      case Map.insertLookupWithKey f a n literals of
@@ -53,7 +53,7 @@ getModelValue v = lift $ Sat.getModelValue v
 
 addClauses :: Cnf.CNF PropositionalAtom -> MiniSat ()
 addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
-               | otherwise               = {-# SCC "addClauses" #-} Cnf.fold f (return ()) cnf
+               | otherwise               = Cnf.fold f (return ()) cnf
   where f clause m = do mlits <- mapM mkLit $ Cnf.clauseToList clause
                         lift $ Sat.addClause mlits
                         m
@@ -62,7 +62,7 @@ addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
 
 -- addClauses :: Cnf.CNF CInt -> MiniSat ()
 -- addClauses cnf | Cnf.isContradiction cnf = lift Sat.contradiction
---                | otherwise               = {-# SCC "addClauses" #-} Cnf.fold f (return ()) cnf
+--                | otherwise               = Cnf.fold f (return ()) cnf
 --   where f clause m = do mlits <- mapM mkLit $ Cnf.clauseToList clause
 --                         lift $ Sat.addClause mlits
 --                         m
@@ -128,7 +128,7 @@ ifM mc mt me = do c <- mc
                   if c then mt else me
 
 value :: (Decoder e a) => MiniSat () -> e -> IO (Maybe e)
-value m p = run $ m >> ifM (lift $ {-# SCC "SAT" #-} Sat.solve []) (Just `liftM` constructValue p) (return Nothing)
+value m p = run $ m >> ifM (lift $ Sat.solve []) (Just `liftM` constructValue p) (return Nothing)
 
 
 

@@ -37,6 +37,7 @@ import qualified Data.Map as Map
 import qualified Data.List as List
 import Data.Typeable
 import qualified Data.Set as Set
+import Qlogic.Utils
 
 data DioVar  = forall a. (DioVarClass a) => DioVar a deriving Typeable
 data VPower a  = VPower a Int
@@ -53,6 +54,19 @@ class PropositionalAtomClass a => DioVarClass a where
   toDioVar = DioVar
   fromDioVar :: DioVar -> Maybe a
   fromDioVar (DioVar a) = cast a
+
+instance ShowLimit a => ShowLimit (DioAtom a) where
+  showlimit n _ | n <= 0 = ""
+  showlimit n (Grt a b)  = "Grt " ++ showlimit (n - 1) a ++ showlimit (n - 1) b
+  showlimit n (Equ a b)  = "Grt " ++ showlimit (n - 1) a ++ showlimit (n - 1) b
+
+instance ShowLimit a => ShowLimit (DioMono a) where
+  showlimit n _ | n <= 0     = ""
+  showlimit n (DioMono c vs) = "DioMono " ++ show n ++ " " ++ showlimit n vs
+
+instance ShowLimit a => ShowLimit (VPower a) where
+  showlimit n _ | n <= 0   = ""
+  showlimit n (VPower a e) = "VPower " ++ showlimit (n - 1) a ++ " " ++ show e
 
 instance PropositionalAtomClass a => PropositionalAtomClass (DioAtom a)
 instance PropositionalAtomClass a => PropositionalAtomClass (DioPoly a)
@@ -75,6 +89,10 @@ instance Eq DioVar where
 
 instance Ord DioVar where
   compare = {-# SCC "DioVarOrd" #-} compareDioVar
+
+instance ShowLimit DioVar where
+  showlimit n _ | n <= 0 = ""
+  showlimit n (DioVar a) = "DioVar " ++ showlimit (n - 1) a
 
 instance PropositionalAtomClass DioVar
 

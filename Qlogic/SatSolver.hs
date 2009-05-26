@@ -6,11 +6,12 @@
 module Qlogic.SatSolver where
 
 import Control.Monad
-import Control.Monad.Trans (lift)
+import Control.Monad.Trans (lift, liftIO, MonadIO)
 import qualified Control.Monad.State.Lazy as State
-import qualified Data.Map as Map
+import qualified Data.HashTable as Hash
 import Data.Typeable
 import Prelude hiding (negate)
+import Qlogic.Utils
 
 import Qlogic.Formula
 import qualified Sat as Sat
@@ -27,6 +28,9 @@ class SatMonad s => Solver s l where
     addClause     :: Clause l -> s Bool
     getModelValue :: l -> s Bool
 
+instance MonadIO Sat.S where
+  liftIO = Sat.lift
+
 instance SatMonad Sat.S where
     solve         = Sat.solve []
     run           = Sat.run
@@ -41,6 +45,9 @@ class Solver s l => IncrementalSolver s l where
     okay :: s () -> s Bool
 
 data Form = Form PropositionalFormula deriving (Eq, Ord, Show, Typeable)
+instance ShowLimit Form where
+  showlimit n _ | n <= 0 = ""
+  showlimit n (Form a)   = "Form " ++ showlimit (n - 1) a
 instance PropositionalAtomClass Form
 
 data ExtLit l = Lit l | TopLit | BotLit deriving Eq
@@ -48,7 +55,7 @@ data ExtLit l = Lit l | TopLit | BotLit deriving Eq
 data Polarity = PosPol | NegPol
 
 data StateElt l = StateElt { inPos :: Bool, inNeg :: Bool, lit :: ExtLit l }
-type SolverState l = Map.Map PropositionalAtom (StateElt l)
+type SolverState l = Hash.HashTable PropositionalAtom (StateElt l)
 type SatSolver s l r = State.StateT (SolverState l) s r
 
 type MiniSat r = SatSolver Sat.S Sat.Lit r
@@ -65,75 +72,94 @@ inPol :: Polarity -> StateElt l -> Bool
 inPol PosPol = inPos
 inPol NegPol = inNeg
 
-alit :: (Monad s, Solver s l) => PropositionalAtom -> SatSolver s l (ExtLit l)
+alit :: (MonadIO s, Solver s l) => PropositionalAtom -> SatSolver s l (ExtLit l)
 alit a = do s <- State.get
-            case Map.lookup a s of
+            lu <- liftIO (Hash.lookup s a)
+            case lu of
               Nothing  -> do theLit <- lift newLit
-                             State.modify $ Map.insert a (StateElt {inPos = False, inNeg = False, lit = Lit theLit})
+                             liftIO $ Hash.insert s a (StateElt {inPos = False, inNeg = False, lit = Lit theLit})
+                             news <- State.get
+                             State.modify $ const news
                              return $ Lit theLit
               Just elt -> return $ lit elt
---                 case Map.lookup a s of
+--                 case Hash.lookup a s of
 --                   Nothing  -> do theLit <- lift newLit
 --                                  State.modify $ addAtom pol a (Lit theLit)
 --                                  return $ Lit theLit
 --                   Just elt -> if inPol pol elt
 --                               then return $ lit elt
---                               else do State.modify $ Map.adjust (setPol pol) a
+--                               else do State.modify $ Hash.adjust (setPol pol) a
 --                                       return $ lit elt
---              where addAtom PosPol a l = Map.insert a (StateElt {inPos = True, inNeg = False, lit = l})
---                    addAtom NegPol a l = Map.insert a (StateElt {inPos = False, inNeg = True, lit = l})
+--              where addAtom PosPol a l = Hash.insert a (StateElt {inPos = True, inNeg = False, lit = l})
+--                    addAtom NegPol a l = Hash.insert a (StateElt {inPos = False, inNeg = True, lit = l})
 --                    setPol PosPol elt = elt{inPos=True}
 --                    setPol NegPol elt = elt{inNeg=True}
 
-plit :: (Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
+plit :: (MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
 plit (A x)   = alit x
 plit Top     = return TopLit
 plit Bot     = return BotLit
 plit (Neg x) = nlit x
 plit fm      = alit $ lvar fm
 
-nlit :: (Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
+nlit :: (MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
 nlit fm = plit fm >>= negateLit
 
-negateLit :: (Monad s, Solver s l) => ExtLit l -> SatSolver s l (ExtLit l)
+negateLit :: (MonadIO s, Solver s l) => ExtLit l -> SatSolver s l (ExtLit l)
 negateLit (Lit x) = liftM Lit $ lift $ negate x
 negateLit TopLit  = return BotLit
 negateLit BotLit  = return TopLit
 
-addLitClause :: (Eq l, Monad s, Solver s l) => Clause (ExtLit l) -> SatSolver s l Bool
+addLitClause :: (Eq l, MonadIO s, Solver s l) => Clause (ExtLit l) -> SatSolver s l Bool
 addLitClause (Clause ls) | elem TopLit ls = return True
-                         | otherwise      = lift $ addClause $ Clause $ foldr f [] ls
+                         | otherwise      = {-# SCC "addLitClause" #-} lift $ addClause $ Clause $ foldr f [] ls
                          where f (Lit x) xs = x:xs
                                f BotLit xs  = xs
                                f TopLit xs  = error "TopLit in SatSolver.addLitClause"
 
-maybeCompute_  :: (Monad s, Solver s l)
+maybeCompute_  :: (MonadIO s, Solver s l)
                => Polarity
                -> PropositionalFormula
                -> SatSolver s l (ExtLit l)
                -> SatSolver s l (ExtLit l)
-maybeCompute_ pol fm m =
+maybeCompute_ pol fm m = {-# SCC "maybeCompute" #-}
   do s <- State.get
      let a = lvar fm
-     case Map.lookup a s of
+--      if (A a) == fm
+--        then
+--          do lu <- liftIO (Hash.lookup s a)
+--             case lu of
+--               Nothing  -> do theLit <- lift newLit
+--                              liftIO $ addAtom pol s a (Lit theLit)
+--                              m
+--               Just elt -> return $ lit elt
+--        else do theLit <- lift newLit
+--                liftIO $ addAtom pol s a (Lit theLit)
+--                return $ Lit theLit
+     lu <- liftIO ({-# SCC "hashLookup" #-} Hash.lookup s a)
+     case lu of
 -- TODO: AS: merge lookup+adjust
        Nothing  -> do theLit <- lift newLit
-                      State.modify $ addAtom pol a (Lit theLit)
+                      liftIO $ {-# SCC "hashInsert" #-} addAtom pol s a (Lit theLit)
+--                       news <- State.get
+--                       State.modify $ const news
                       m
        Just elt -> if inPol pol elt
                    then return $ lit elt
-                   else do State.modify $ Map.adjust (setPol pol) a
+                   else do liftIO $ {-# SCC "hashInsert" #-} Hash.insert s a (setPol pol elt)
+--                            news <- State.get
+--                            State.modify $ const news
                            m
-  where addAtom PosPol a l = Map.insert a (StateElt {inPos = True, inNeg = False, lit = l})
-        addAtom NegPol a l = Map.insert a (StateElt {inPos = False, inNeg = True, lit = l})
-        setPol PosPol elt = elt{inPos=True}
-        setPol NegPol elt = elt{inNeg=True}
+   where addAtom PosPol s a l = Hash.insert s a (StateElt {inPos = True, inNeg = False, lit = l})
+         addAtom NegPol s a l = Hash.insert s a (StateElt {inPos = False, inNeg = True, lit = l})
+         setPol PosPol elt = elt{inPos=True}
+         setPol NegPol elt = elt{inNeg=True}
 
-maybeComputePos, maybeComputeNeg :: (Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l) -> SatSolver s l (ExtLit l)
+maybeComputePos, maybeComputeNeg :: (MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l) -> SatSolver s l (ExtLit l)
 maybeComputePos = maybeCompute_ PosPol
 maybeComputeNeg = maybeCompute_ NegPol
 
-addPositively :: (Eq l, Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
+addPositively :: (Eq l, MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
 addPositively fm@(And as) = {-# SCC "addPosAnd" #-}
   maybeComputePos fm $
   do nfm <- nlit fm
@@ -181,7 +207,7 @@ addPositively fm@(A _) = {-# SCC "addPosAtom" #-} plit fm
 addPositively Top = {-# SCC "addPosTop" #-} return TopLit
 addPositively Bot = {-# SCC "addPosBot" #-} return BotLit
 
-addNegatively :: (Eq l, Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
+addNegatively :: (Eq l, MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
 addNegatively fm@(And as) = {-# SCC "addNegAnd" #-}
   maybeComputeNeg fm $
   do pfm <- plit fm
@@ -230,7 +256,7 @@ addNegatively fm@(A _) = {-# SCC "addNegAtom" #-} plit fm
 addNegatively Top = {-# SCC "addNegTop" #-} return TopLit
 addNegatively Bot = {-# SCC "addNegBot" #-} return BotLit
 
-addFormula :: (Eq l, Monad s, Solver s l) => PropositionalFormula -> SatSolver s l ()
+addFormula :: (Eq l, MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l ()
 addFormula fm = {-# SCC "addFormula" #-}
  do pfm <- plit fm
     addPositively fm
@@ -254,20 +280,22 @@ instance (Decoder e1 a1, Decoder e2 a2) => Decoder (e1 :&: e2) (OneOf a1 a2) whe
   add (Foo a) (e1 :&: e2) = add a e1 :&: e2
   add (Bar b) (e1 :&: e2) = e1 :&: (add b e2)
 
-constructValue :: (Decoder e a, Monad s, Solver s l) => e -> SatSolver s l e
-constructValue e = State.get >>= Map.foldWithKey f (return $ e)
-  where f a v m = case extract a of
-                    Just a' -> case lit v of
-                                 Lit v' -> lift (getModelValue v') >>= \ val -> if val then add a' `liftM` m else m
-                                 _ -> m
-                    Nothing -> m
+constructValue :: (Decoder e a, MonadIO s, Solver s l) => e -> SatSolver s l e
+constructValue e = do s <- State.get >>= liftIO . Hash.toList
+                      foldl f (return e) s
+  where f m (a, v) = case extract a of
+                       Just a' -> case lit v of
+                                    Lit v' -> lift (getModelValue v') >>= \ val -> if val then add a' `liftM` m else m
+                                    _ -> m
+                       Nothing -> m
 
 ifM :: Monad m =>  m Bool -> m a -> m a -> m a
 ifM mc mt me = do c <- mc
                   if c then mt else me
 
 run_ :: (Monad s, SatMonad s) => SatSolver s l r -> IO r
-run_ m = run $ State.evalStateT m Map.empty
+run_ m = do s <- Hash.new (==) (Hash.hashString . showlimit 8)
+            run $ State.evalStateT m s
 
-value :: (Decoder e a, Monad s, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)
+value :: (Decoder e a, MonadIO s, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)
 value m p = run_ $ m >> ifM (lift solve) (Just `liftM` constructValue p) (return Nothing)

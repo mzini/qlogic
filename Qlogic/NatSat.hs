@@ -36,6 +36,7 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Typeable
+import Qlogic.Utils
 
 data Size = Bits Int
           | Bound Int
@@ -60,7 +61,11 @@ type NatFormula = [PropositionalFormula]
 data PLVec a = PLVec a Int
   deriving (Eq, Ord, Show, Typeable)
 
-instance (Eq a, Ord a, Show a, Typeable a) => PropositionalAtomClass (PLVec a)
+instance ShowLimit a => ShowLimit (PLVec a) where
+  showlimit n _ | n <= 0  = ""
+  showlimit n (PLVec a i) = "PLVec " ++ showlimit (n - 1) a ++ show i
+
+instance (Eq a, Ord a, Show a, Typeable a, ShowLimit a) => PropositionalAtomClass (PLVec a)
 
 type NatAssign a = Map.Map a Int
 
@@ -188,13 +193,13 @@ ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
    where lengthdiff        = length qs - length ps
 
 -- creates a variable with enough bits to represent n
-natAtom :: (Ord a, Show a, Typeable a) => Size -> a -> NatFormula
+natAtom :: (Ord a, Show a, Typeable a, ShowLimit a) => Size -> a -> NatFormula
 -- ^ creates a "natural number variable" encoded by a list of
 --   propositional variables. The length of the list is chosen
 --   to be exactly enough in order to represent n
 natAtom size a = nBitVar (bits size) a
 
-nBitVar :: (Ord a, Show a, Typeable a) => Int -> a -> NatFormula
+nBitVar :: (Ord a, Show a, Typeable a, ShowLimit a) => Int -> a -> NatFormula
 nBitVar n v | n > 0     = nBitVar (n - 1) v ++ [atom (PLVec v n)]
             | otherwise = []
 

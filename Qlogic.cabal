@@ -1,6 +1,6 @@
 name:               Qlogic
 version:            0.1
-synopsis:           Propositional Logic 
+synopsis:           Propositional Logic
 description:
   An interface to the MiniSat SAT solver
 author:             The Authors
@@ -17,6 +17,7 @@ library
                     Qlogic.NatSat
                     Qlogic.Diophantine
                     Qlogic.Cnf
+                    Qlogic.Utils
 
  other-modules:     Sat
                     Name
@@ -30,6 +31,7 @@ library
                     Generics
                     TypeOperators
                     GeneralizedNewtypeDeriving
+                    OverlappingInstances
 
  extra-lib-dirs:    Folkung/instantiate
                     Folkung/minisat/mtl
@@ -53,6 +55,7 @@ executable qlogic-test
                     Qlogic.NatSat
                     Qlogic.Diophantine
                     Qlogic.Cnf
+                    Qlogic.Utils
                     Sat
                     Name
                     Str
@@ -74,3 +77,4 @@ executable qlogic-test
                     Generics
                     TypeOperators
                     GeneralizedNewtypeDeriving
+                    OverlappingInstances

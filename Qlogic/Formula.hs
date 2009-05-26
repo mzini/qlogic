@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Qlogic.Formula
   (-- * Types
@@ -46,6 +47,7 @@ import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Text.PrettyPrint.HughesPJ
+import Qlogic.Utils
 
 infixr 3 &&&
 infixr 2 |||
@@ -54,12 +56,15 @@ infixr 1 <->
 
 data PropositionalAtom = forall a. (PropositionalAtomClass a) => PropositionalAtom a deriving Typeable
 
-class (Eq a, Ord a, Show a, Typeable a) => PropositionalAtomClass a  where
+class (Eq a, Ord a, Show a, ShowLimit a, Typeable a) => PropositionalAtomClass a  where
             toPropositionalAtom :: a -> PropositionalAtom
             toPropositionalAtom = PropositionalAtom
             fromPropositionalAtom :: PropositionalAtom -> Maybe a
             fromPropositionalAtom (PropositionalAtom a) = cast a
 
+instance Show a => ShowLimit a where
+  showlimit n _ | n <= 0 = ""
+  showlimit n a          = show a
 
 comparePropositionalAtom :: PropositionalAtom -> PropositionalAtom -> Ordering
 PropositionalAtom (a :: at) `comparePropositionalAtom` PropositionalAtom (b :: bt) 
@@ -77,6 +82,10 @@ instance Ord PropositionalAtom where
 instance Show PropositionalAtom where
   show (PropositionalAtom a) = "PropositionalAtom " ++ show  a
 
+instance ShowLimit PropositionalAtom where
+  showlimit n _ | n <= 0            = ""
+  showlimit n (PropositionalAtom a) = "PA " ++ showlimit (n - 1) a
+
 instance PropositionalAtomClass PropositionalAtom
 
 data Formula a = A a
@@ -88,6 +97,18 @@ data Formula a = A a
                | Neg (Formula a)
                | Top
                | Bot deriving (Eq, Ord, Typeable, Show)
+
+instance ShowLimit a => ShowLimit (Formula a) where
+  showlimit n _ | n <= 0  = ""
+  showlimit n (A a)       = "A " ++ showlimit (n - 1) a
+  showlimit n (And as)    = "And " ++ showlimit n as
+  showlimit n (Or as)     = "Or " ++ showlimit n as
+  showlimit n (Iff a b)   = "Iff " ++ showlimit (n - 1) a ++ " " ++ showlimit (n - 1) b
+  showlimit n (Ite a b c) = "Ite " ++ showlimit (n - 1) a ++ " " ++ showlimit (n - 1) b ++ " " ++ showlimit (n - 1) c
+  showlimit n (Imp a b)   = "Imp " ++ showlimit (n - 1) a ++ " " ++ showlimit (n - 1) b
+  showlimit n (Neg a)     = "Neg " ++ showlimit (n - 1) a
+  showlimit _ Top         = "Top"
+  showlimit _ Bot         = "Bot"
 
 class Eq a => Boolean a where
   (&&) :: a -> a -> a
