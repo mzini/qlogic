@@ -74,12 +74,10 @@ inPol NegPol = inNeg
 
 alit :: (MonadIO s, Solver s l) => PropositionalAtom -> SatSolver s l (ExtLit l)
 alit a = do s <- State.get
-            lu <- liftIO (Hash.lookup s a)
+            lu <- liftIO ({-# SCC "hashLookup" #-} Hash.lookup s a)
             case lu of
               Nothing  -> do theLit <- lift newLit
-                             liftIO $ Hash.insert s a (StateElt {inPos = False, inNeg = False, lit = Lit theLit})
-                             news <- State.get
-                             State.modify $ const news
+                             liftIO $ {-# SCC "hashInsert" #-} Hash.insert s a (StateElt {inPos = False, inNeg = False, lit = Lit theLit})
                              return $ Lit theLit
               Just elt -> return $ lit elt
 --                 case Hash.lookup a s of
@@ -120,7 +118,7 @@ addLitClause (Clause ls) | elem TopLit ls = return True
 maybeCompute_  :: (MonadIO s, Solver s l)
                => Polarity
                -> PropositionalFormula
-               -> SatSolver s l (ExtLit l)
+               -> (ExtLit l -> SatSolver s l (ExtLit l))
                -> SatSolver s l (ExtLit l)
 maybeCompute_ pol fm m = {-# SCC "maybeCompute" #-}
   do s <- State.get
@@ -143,38 +141,41 @@ maybeCompute_ pol fm m = {-# SCC "maybeCompute" #-}
                       liftIO $ {-# SCC "hashInsert" #-} addAtom pol s a (Lit theLit)
 --                       news <- State.get
 --                       State.modify $ const news
-                      m
+                      m $ Lit theLit
        Just elt -> if inPol pol elt
                    then return $ lit elt
                    else do liftIO $ {-# SCC "hashInsert" #-} Hash.insert s a (setPol pol elt)
 --                            news <- State.get
 --                            State.modify $ const news
-                           m
+                           m $ lit elt
    where addAtom PosPol s a l = Hash.insert s a (StateElt {inPos = True, inNeg = False, lit = l})
          addAtom NegPol s a l = Hash.insert s a (StateElt {inPos = False, inNeg = True, lit = l})
          setPol PosPol elt = elt{inPos=True}
          setPol NegPol elt = elt{inNeg=True}
 
-maybeComputePos, maybeComputeNeg :: (MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l) -> SatSolver s l (ExtLit l)
+maybeComputePos, maybeComputeNeg :: (MonadIO s, Solver s l)
+                                 => PropositionalFormula
+                                 -> (ExtLit l -> SatSolver s l (ExtLit l))
+                                 -> SatSolver s l (ExtLit l)
 maybeComputePos = maybeCompute_ PosPol
 maybeComputeNeg = maybeCompute_ NegPol
 
 addPositively :: (Eq l, MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
 addPositively fm@(And as) = {-# SCC "addPosAnd" #-}
-  maybeComputePos fm $
-  do nfm <- nlit fm
+  maybeComputePos fm $ \pfm ->
+  do nfm <- negateLit pfm
      lits <- mapM addPositively as
      mapM_ (\l -> addLitClause (Clause [nfm, l])) lits
-     plit fm
+     return pfm
 addPositively fm@(Or as) = {-# SCC "addPosOr" #-}
-  maybeComputePos fm $
-  do nfm <- nlit fm
+  maybeComputePos fm $ \pfm ->
+  do nfm <- negateLit pfm
      lits <- mapM addPositively as
      addLitClause (Clause (nfm:lits))
-     plit fm
+     return pfm
 addPositively fm@(a `Iff` b) = {-# SCC "addPosIff" #-}
-  maybeComputePos fm $
-  do nfm <- nlit fm
+  maybeComputePos fm $ \pfm ->
+  do nfm <- negateLit pfm
      apos <- addPositively a
      addNegatively a
      aneg <- negateLit apos
@@ -183,10 +184,10 @@ addPositively fm@(a `Iff` b) = {-# SCC "addPosIff" #-}
      bneg <- negateLit bpos
      addLitClause $ Clause [nfm, aneg, bpos]
      addLitClause $ Clause [nfm, apos, bneg]
-     plit fm
+     return pfm
 addPositively fm@(Ite g t e) = {-# SCC "addPosIte" #-}
-  maybeComputePos fm $
-  do nfm <- nlit fm
+  maybeComputePos fm $ \pfm ->
+  do nfm <- negateLit pfm
      gpos <- addPositively g
      addNegatively g
      gneg <- negateLit gpos
@@ -194,14 +195,14 @@ addPositively fm@(Ite g t e) = {-# SCC "addPosIte" #-}
      epos <- addPositively e
      addLitClause $ Clause [nfm, gneg, tpos]
      addLitClause $ Clause [nfm, gpos, epos]
-     plit fm
+     return pfm
 addPositively fm@(a `Imp` b) = {-# SCC "addPosImp" #-}
-  maybeComputePos fm $
-  do nfm <- nlit fm
+  maybeComputePos fm $ \pfm ->
+  do nfm <- negateLit pfm
      aneg <- addNegatively a >>= negateLit
      bpos <- addPositively b
      addLitClause $ Clause [nfm, aneg, bpos]
-     plit fm
+     return pfm
 addPositively fm@(Neg a) = {-# SCC "addPosNeg" #-} addNegatively a >>= negateLit
 addPositively fm@(A _) = {-# SCC "addPosAtom" #-} plit fm
 addPositively Top = {-# SCC "addPosTop" #-} return TopLit
@@ -209,21 +210,18 @@ addPositively Bot = {-# SCC "addPosBot" #-} return BotLit
 
 addNegatively :: (Eq l, MonadIO s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
 addNegatively fm@(And as) = {-# SCC "addNegAnd" #-}
-  maybeComputeNeg fm $
-  do pfm <- plit fm
-     nlits <- mapM (\l -> addNegatively l >>= negateLit) as
+  maybeComputeNeg fm $ \pfm ->
+  do nlits <- mapM (\l -> addNegatively l >>= negateLit) as
      addLitClause (Clause (pfm:nlits))
      return pfm
 addNegatively fm@(Or as) = {-# SCC "addNegOr" #-}
-  maybeComputeNeg fm $
-  do pfm <- plit fm
-     nlits <- mapM (\l -> addNegatively l >>= negateLit) as
+  maybeComputeNeg fm $ \pfm ->
+  do nlits <- mapM (\l -> addNegatively l >>= negateLit) as
      mapM_ (\l -> addLitClause (Clause [pfm, l])) nlits
      return pfm
 addNegatively fm@(a `Iff` b) = {-# SCC "addNegIff" #-}
-  maybeComputeNeg fm $
-  do pfm <- plit fm
-     apos <- addPositively a
+  maybeComputeNeg fm $ \pfm ->
+  do apos <- addPositively a
      addNegatively a
      aneg <- negateLit apos
      bpos <- addPositively b
@@ -233,9 +231,8 @@ addNegatively fm@(a `Iff` b) = {-# SCC "addNegIff" #-}
      addLitClause $ Clause [pfm, aneg, bneg]
      return pfm
 addNegatively fm@(Ite g t e) = {-# SCC "addNegIte" #-}
-  maybeComputeNeg fm $
-  do pfm <- plit fm
-     gpos <- addPositively g
+  maybeComputeNeg fm $ \pfm ->
+  do gpos <- addPositively g
      addNegatively g
      gneg <- negateLit gpos
      tneg <- addNegatively t >>= negateLit
@@ -244,9 +241,8 @@ addNegatively fm@(Ite g t e) = {-# SCC "addNegIte" #-}
      addLitClause $ Clause [pfm, gpos, eneg]
      return pfm
 addNegatively fm@(a `Imp` b) = {-# SCC "addNegImp" #-}
-  maybeComputeNeg fm $
-  do pfm <- plit fm
-     apos <- addPositively a
+  maybeComputeNeg fm $ \pfm ->
+  do apos <- addPositively a
      bneg <- addNegatively b >>= negateLit
      addLitClause $ Clause [pfm, apos]
      addLitClause $ Clause [pfm, bneg]
@@ -282,6 +278,8 @@ instance (Decoder e1 a1, Decoder e2 a2) => Decoder (e1 :&: e2) (OneOf a1 a2) whe
 
 constructValue :: (Decoder e a, MonadIO s, Solver s l) => e -> SatSolver s l e
 constructValue e = do s <- State.get >>= liftIO . Hash.toList
+--                       ht <- State.get >>= liftIO . Hash.longestChain
+--                       liftIO $ putStrLn $ "Longest Chain in Hastable: " ++ show (length ht)
                       foldl f (return e) s
   where f m (a, v) = case extract a of
                        Just a' -> case lit v of
@@ -294,7 +292,7 @@ ifM mc mt me = do c <- mc
                   if c then mt else me
 
 run_ :: (Monad s, SatMonad s) => SatSolver s l r -> IO r
-run_ m = do s <- Hash.new (==) (Hash.hashString . showlimit 8)
+run_ m = do s <- Hash.new (==) (Hash.hashString . {-# SCC "showlimit" #-} showlimit 8)
             run $ State.evalStateT m s
 
 value :: (Decoder e a, MonadIO s, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)

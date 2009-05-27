@@ -24,7 +24,7 @@ library
                     Str
                     Form
 
- build-depends:     containers, mtl, base==3.0.3.0, pretty
+ build-depends:     containers, mtl, base>=4.0.0.0, pretty, syb
 
  extensions:        CPP
                     ForeignFunctionInterface
@@ -44,10 +44,12 @@ library
  hs-source-dirs:    .
                     Folkung/Haskell
 
+ ghc-options:       -O2
+
 executable qlogic-test
  main-is:           Qlogic/Test/Main.hs
 
- build-depends:     containers, mtl, base==3.0.3.0, QuickCheck, pretty
+ build-depends:     containers, mtl, base>=4.0.0.0, QuickCheck, pretty, syb
 
  other-modules:     Qlogic.Formula
                     Qlogic.Assign
@@ -78,3 +80,5 @@ executable qlogic-test
                     TypeOperators
                     GeneralizedNewtypeDeriving
                     OverlappingInstances
+
+ ghc-options:       -O2
