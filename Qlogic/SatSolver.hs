@@ -74,10 +74,10 @@ inPol NegPol = inNeg
 
 alit :: (MonadIO s, Solver s l) => PropositionalAtom -> SatSolver s l (ExtLit l)
 alit a = do s <- State.get
-            lu <- liftIO ({-# SCC "hashLookup" #-} Hash.lookup s a)
+            lu <- liftIO ({-# SCC "hashLookupAlit" #-} Hash.lookup s a)
             case lu of
               Nothing  -> do theLit <- lift newLit
-                             liftIO $ {-# SCC "hashInsert" #-} Hash.insert s a (StateElt {inPos = False, inNeg = False, lit = Lit theLit})
+                             liftIO $ {-# SCC "hashInsertAlit" #-} Hash.insert s a (StateElt {inPos = False, inNeg = False, lit = Lit theLit})
                              return $ Lit theLit
               Just elt -> return $ lit elt
 --                 case Hash.lookup a s of
