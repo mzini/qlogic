@@ -233,8 +233,7 @@ addNegatively Bot = {-# SCC "addNegBot" #-} return BotLit
 
 addFormula :: (Eq l, Monad s, Solver s l) => PropositionalFormula -> SatSolver s l ()
 addFormula fm = {-# SCC "addFormula" #-}
- do pfm <- plit fm
-    addPositively fm
+ do pfm <- addPositively fm
     addLitClause $ Clause [pfm]
     return ()
 
