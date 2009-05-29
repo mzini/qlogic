@@ -116,17 +116,19 @@ maybeCompute_  :: (Monad s, Solver s l)
                -> (ExtLit l -> SatSolver s l (ExtLit l))
                -> SatSolver s l (ExtLit l)
 maybeCompute_ pol fm m =
-  do s <- State.get
-     let a = lvar fm
-     case {-# SCC "mapLookup" #-} Map.lookup a s of
--- TODO: AS: merge lookup+adjust
-       Nothing  -> do theLit <- lift newLit
-                      State.modify $ addAtom pol a (Lit theLit)
-                      m $ Lit theLit
-       Just elt -> if inPol pol elt
-                   then return $ lit elt
-                   else do State.modify $ {-# SCC "mapAdjust" #-} Map.adjust (setPol pol) a
-                           m $ lit elt
+  do theLit <- lift newLit
+     m $ Lit theLit
+--      s <- State.get
+--      let a = lvar fm
+--      case {-# SCC "mapLookup" #-} Map.lookup a s of
+-- -- TODO: AS: merge lookup+adjust
+--        Nothing  -> do theLit <- lift newLit
+--                       State.modify $ addAtom pol a (Lit theLit)
+--                       m $ Lit theLit
+--        Just elt -> if inPol pol elt
+--                    then return $ lit elt
+--                    else do State.modify $ {-# SCC "mapAdjust" #-} Map.adjust (setPol pol) a
+--                            m $ lit elt
   where addAtom PosPol a l = {-# SCC "mapInsert" #-} Map.insert a (StateElt {inPos = True, inNeg = False, lit = l})
         addAtom NegPol a l = {-# SCC "mapInsert" #-} Map.insert a (StateElt {inPos = False, inNeg = True, lit = l})
         setPol PosPol elt = elt{inPos=True}

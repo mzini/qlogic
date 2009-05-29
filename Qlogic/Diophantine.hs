@@ -197,8 +197,8 @@ maybeComputePower n fm m =
                       return mres)
 
 toFormGen :: DioVarClass a
-          => ((a -> Size) -> DioPoly a -> DioSetMonad a NatFormula)
-          -> (a -> Size)
+          => (Size -> DioPoly a -> DioSetMonad a NatFormula)
+          -> Size
           -> DioFormula a
           -> DioSetMonad a PropositionalFormula
 toFormGen f n fm@(A (p `Grt` q)) = do pres <- f n p
@@ -227,14 +227,14 @@ toFormGen _ _ Top                = return Top
 toFormGen _ _ Bot                = return Bot
 
 toFormulaGen :: DioVarClass a
-             => ((a -> Size) -> DioFormula a -> DioSetMonad a PropositionalFormula)
-             -> (a -> Size)
+             => (Size -> DioFormula a -> DioSetMonad a PropositionalFormula)
+             -> Size
              -> DioFormula a
              -> PropositionalFormula
 toFormulaGen f n phi = {-# SCC "toFormulaGen" #-} fst mainResult && varRestricts && extraForms
                        where varRestricts    = bigAnd (Set.map (varRestrict n) (vars (snd mainResult)))
                              extraForms      = (bigAnd . Set.elems . formulas . snd) mainResult
-                             varRestrict n v = (natToFormula . (+ 1) . bound) (n v) .>. natAtom (n v) v
+                             varRestrict n v = (natToFormula . (+ 1) . bound) n .>. natAtom n v
                              mainResult      = State.runState (f n phi) emptySt
 
 -- toFormulaSimp :: DioVarClass a => Size -> DioFormula a -> PropositionalFormula
@@ -259,7 +259,7 @@ toFormulaGen f n phi = {-# SCC "toFormulaGen" #-} fst mainResult && varRestricts
 -- Optimisation c of Section 5 in the Fuhs-et-al paper
 -- prunes all "numbers" to their maximum length based on
 -- the assumption that the value of all variables is at most n
-toFormula :: DioVarClass a => (a -> Size) -> DioFormula a -> PropositionalFormula
+toFormula :: DioVarClass a => Size -> DioFormula a -> PropositionalFormula
 -- ^ translates a Diophantine constraint into a propositional formula,
 --   where variables are instantiated by values between 0 and n.
 --   this function tracks the maximum value of all subformulas.
@@ -267,10 +267,10 @@ toFormula :: DioVarClass a => (a -> Size) -> DioFormula a -> PropositionalFormul
 --   maximum values
 toFormula = toFormulaGen toFormula'
 
-toFormula' :: DioVarClass a => (a -> Size) -> DioFormula a -> DioSetMonad a PropositionalFormula
+toFormula' :: DioVarClass a => Size -> DioFormula a -> DioSetMonad a PropositionalFormula
 toFormula' = {-# SCC "toFormula'" #-} toFormGen polyToNat
 
-polyToNat :: DioVarClass a => (a -> Size) -> DioPoly a -> DioSetMonad a NatFormula
+polyToNat :: DioVarClass a => Size -> DioPoly a -> DioSetMonad a NatFormula
 polyToNat n []        = return [Bot]
 polyToNat n fm@(x:xs) = {-# SCC "polyToNat" #-} maybeComputePoly newmax fm $
                         do pres <- monoToNat n x
@@ -283,7 +283,7 @@ polyToNat n fm@(x:xs) = {-# SCC "polyToNat" #-} maybeComputePoly newmax fm $
                            return addres -- $ polyAtom newmax fm
                         where newmax = polyBound n fm
 
-monoToNat :: DioVarClass a => (a -> Size) -> DioMono a -> DioSetMonad a NatFormula
+monoToNat :: DioVarClass a => Size -> DioMono a -> DioSetMonad a NatFormula
 monoToNat n (DioMono m [])          = return $ natToFormula m
 monoToNat n fm@(DioMono m (vp:vps)) = {-# SCC "monoToNat" #-} maybeComputeMono newmax fm $
                                       do pres <- powerToNat n vp
@@ -296,11 +296,11 @@ monoToNat n fm@(DioMono m (vp:vps)) = {-# SCC "monoToNat" #-} maybeComputeMono n
                                          return multres -- $ monoAtom newmax fm
                                       where newmax = monoBound n fm
 
-powerToNat :: DioVarClass a => (a -> Size) -> VPower a -> DioSetMonad a NatFormula
+powerToNat :: DioVarClass a => Size -> VPower a -> DioSetMonad a NatFormula
 powerToNat n fm@(VPower v m) | m > 0  = {-# SCC "powerToNat" #-} maybeComputePower newmax fm $
                                         do vs <- getVars
                                            setVars (Set.insert v vs)
-                                           let pres = natAtom (n v) v
+                                           let pres = natAtom n v
                                            qres <- powerToNat n (VPower v (pred m))
                                            let multres' = State.runState (mTimes pres qres) Set.empty
                                            let multres = truncTo (bits newmax) $ fst multres'
@@ -311,14 +311,14 @@ powerToNat n fm@(VPower v m) | m > 0  = {-# SCC "powerToNat" #-} maybeComputePow
                                         where newmax        = powerBound n fm
 powerToNat n (VPower v m) | otherwise = {-# SCC "powerToNatBase" #-} return [Top]
 
-polyBound :: (a -> Size) -> DioPoly a -> Size
+polyBound :: Size -> DioPoly a -> Size
 polyBound n = {-# SCC "polyBound" #-} Bound . sum . map (bound . (monoBound n))
 
-monoBound :: (a -> Size) -> DioMono a -> Size
+monoBound :: Size -> DioMono a -> Size
 monoBound n (DioMono m xs) = {-# SCC "monoBound" #-} Bound $ foldr ((*) . bound . powerBound n) m xs
 
-powerBound :: (a -> Size) -> VPower a -> Size
-powerBound n (VPower x m) = {-# SCC "powerBound" #-} Bound $ (bound $ n x) ^ m
+powerBound :: Size -> VPower a -> Size
+powerBound n (VPower x m) = {-# SCC "powerBound" #-} Bound $ bound n ^ m
 
 natToPoly :: Int -> DioPoly a
 natToPoly n = [DioMono n []]

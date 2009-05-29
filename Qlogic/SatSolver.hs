@@ -123,31 +123,18 @@ maybeCompute_  :: (MonadIO s, Solver s l)
 maybeCompute_ pol fm m = {-# SCC "maybeCompute" #-}
   do s <- State.get
      let a = lvar fm
---      if (A a) == fm
---        then
---          do lu <- liftIO (Hash.lookup s a)
---             case lu of
---               Nothing  -> do theLit <- lift newLit
---                              liftIO $ addAtom pol s a (Lit theLit)
---                              m
---               Just elt -> return $ lit elt
---        else do theLit <- lift newLit
---                liftIO $ addAtom pol s a (Lit theLit)
---                return $ Lit theLit
-     lu <- liftIO ({-# SCC "hashLookup" #-} Hash.lookup s a)
-     case lu of
--- TODO: AS: merge lookup+adjust
-       Nothing  -> do theLit <- lift newLit
-                      liftIO $ {-# SCC "hashInsert" #-} addAtom pol s a (Lit theLit)
---                       news <- State.get
---                       State.modify $ const news
-                      m $ Lit theLit
-       Just elt -> if inPol pol elt
-                   then return $ lit elt
-                   else do liftIO $ {-# SCC "hashInsert" #-} Hash.insert s a (setPol pol elt)
---                            news <- State.get
---                            State.modify $ const news
-                           m $ lit elt
+     theLit <- lift newLit
+     m $ Lit theLit
+--      lu <- liftIO ({-# SCC "hashLookup" #-} Hash.lookup s a)
+--      case lu of
+-- -- TODO: AS: merge lookup+adjust
+--        Nothing  -> do theLit <- lift newLit
+--                       liftIO $ {-# SCC "hashInsert" #-} addAtom pol s a (Lit theLit)
+--                       m $ Lit theLit
+--        Just elt -> if inPol pol elt
+--                    then return $ lit elt
+--                    else do liftIO $ {-# SCC "hashInsert" #-} Hash.insert s a (setPol pol elt)
+--                            m $ lit elt
    where addAtom PosPol s a l = Hash.insert s a (StateElt {inPos = True, inNeg = False, lit = l})
          addAtom NegPol s a l = Hash.insert s a (StateElt {inPos = False, inNeg = True, lit = l})
          setPol PosPol elt = elt{inPos=True}
@@ -277,8 +264,8 @@ instance (Decoder e1 a1, Decoder e2 a2) => Decoder (e1 :&: e2) (OneOf a1 a2) whe
 
 constructValue :: (Decoder e a, MonadIO s, Solver s l) => e -> SatSolver s l e
 constructValue e = do s <- State.get >>= liftIO . Hash.toList
---                       ht <- State.get >>= liftIO . Hash.longestChain
---                       liftIO $ putStrLn $ "Longest Chain in Hastable: " ++ show (length ht)
+                      ht <- State.get >>= liftIO . Hash.longestChain
+                      liftIO $ putStrLn $ "Longest Chain in Hastable: " ++ show (length ht)
                       foldl f (return e) s
   where f m (a, v) = case extract a of
                        Just a' -> case lit v of
@@ -291,7 +278,7 @@ ifM mc mt me = do c <- mc
                   if c then mt else me
 
 run_ :: (Monad s, SatMonad s) => SatSolver s l r -> IO r
-run_ m = do s <- Hash.new (==) (Hash.hashString . {-# SCC "showlimit" #-} showlimit 8)
+run_ m = do s <- Hash.new (==) (Hash.hashString . {-# SCC "showlimit" #-} showlimit 7)
             run $ State.evalStateT m s
 
 value :: (Decoder e a, MonadIO s, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)
