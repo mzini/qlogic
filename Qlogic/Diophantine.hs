@@ -113,24 +113,27 @@ data St a = St { vars :: Set.Set a
                , polys :: Map.Map (DioPoly a) NatFormula
                , monos :: Map.Map (DioMono a) NatFormula
                , powers :: Map.Map (VPower a) NatFormula
+               , nextVar :: Int
                }
 
 type DioSetMonad a r = State.State (St a) r
 
 emptySt :: St a
-emptySt = St{vars = Set.empty, formulas = Set.empty, polys = Map.empty, monos = Map.empty, powers = Map.empty}
+emptySt = St{vars = Set.empty, formulas = Set.empty, polys = Map.empty, monos = Map.empty, powers = Map.empty, nextVar = 0}
 
 getVars :: DioSetMonad a (Set.Set a)
 getForms :: DioSetMonad a (Set.Set PropositionalFormula)
 getPolys :: DioSetMonad a (Map.Map (DioPoly a) NatFormula)
 getMonos :: DioSetMonad a (Map.Map (DioMono a) NatFormula)
 getPowers :: DioSetMonad a (Map.Map (VPower a) NatFormula)
+getNextVar :: DioSetMonad a Int
 
 getVars = liftM vars State.get
 getForms = liftM formulas State.get
 getPolys = liftM polys State.get
 getMonos = liftM monos State.get
 getPowers = liftM powers State.get
+getNextVar = liftM nextVar State.get
 
 setVars :: Set.Set a -> DioSetMonad a ()
 setVars set = State.modify $ \s -> s{vars = set}
@@ -146,6 +149,9 @@ setMonos tbl = State.modify $ \s -> s{monos = tbl}
 
 setPowers :: Map.Map (VPower a) NatFormula -> DioSetMonad a ()
 setPowers tbl = State.modify $ \s -> s{powers = tbl}
+
+setNextVar :: Int -> DioSetMonad a ()
+setNextVar n = State.modify $ \s -> s{nextVar = n}
 
 -- maybeComputeForm :: PropositionalAtomClass a
 --                  => DioFormula a
@@ -275,11 +281,13 @@ polyToNat n []        = return [Bot]
 polyToNat n fm@(x:xs) = {-# SCC "polyToNat" #-} maybeComputePoly newmax fm $
                         do pres <- monoToNat n x
                            qres <- polyToNat n xs
-                           let addres' = State.runState (mAdd pres qres) Set.empty
+                           v <- getNextVar
+                           let addres' = State.runState (mAdd pres qres) (Set.empty, v)
                            let addres = truncTo (bits newmax) (fst addres')
                            -- let newform = bigAnd $ zipWith (<->) (polyAtom newmax fm) addres
                            s <- getForms
-                           setForms $ snd addres' `Set.union` s -- Set.insert newform s
+                           setForms $ fst (snd addres') `Set.union` s -- Set.insert newform s
+                           setNextVar $ snd $ snd addres'
                            return addres --  polyAtom newmax fm
                         where newmax = polyBound n fm
 
@@ -288,11 +296,13 @@ monoToNat n (DioMono m [])          = return $ natToFormula m
 monoToNat n fm@(DioMono m (vp:vps)) = {-# SCC "monoToNat" #-} maybeComputeMono newmax fm $
                                       do pres <- powerToNat n vp
                                          qres <- monoToNat n (DioMono m vps)
-                                         let multres' = State.runState (mTimes pres qres) Set.empty
+                                         v <- getNextVar
+                                         let multres' = State.runState (mTimes pres qres) (Set.empty, v)
                                          let multres = truncTo (bits newmax) $ fst multres'
                                          -- let newform = bigAnd $ zipWith (<->) (monoAtom newmax fm) multres
                                          s <- getForms
-                                         setForms $ snd multres' `Set.union` s -- Set.insert newform s
+                                         setForms $ fst (snd multres') `Set.union` s -- Set.insert newform s
+                                         setNextVar $ snd $ snd multres'
                                          return multres -- monoAtom newmax fm
                                       where newmax = monoBound n fm
 
@@ -302,11 +312,13 @@ powerToNat n fm@(VPower v m) | m > 0  = {-# SCC "powerToNat" #-} maybeComputePow
                                            setVars (Set.insert v vs)
                                            let pres = natAtom n v
                                            qres <- powerToNat n (VPower v (pred m))
-                                           let multres' = State.runState (mTimes pres qres) Set.empty
+                                           v' <- getNextVar
+                                           let multres' = State.runState (mTimes pres qres) (Set.empty, v')
                                            let multres = truncTo (bits newmax) $ fst multres'
                                            -- let newform = bigAnd $ zipWith (<->) (powerAtom newmax fm) multres
                                            s <- getForms
-                                           setForms $ snd multres' `Set.union` s -- Set.insert newform s
+                                           setForms $ fst (snd multres') `Set.union` s -- Set.insert newform s
+                                           setNextVar $ snd $ snd multres'
                                            return multres --  powerAtom newmax fm
                                         where newmax        = powerBound n fm
 powerToNat n (VPower v m) | otherwise = {-# SCC "powerToNatBase" #-} return [Top]

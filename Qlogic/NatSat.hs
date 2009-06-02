@@ -29,6 +29,7 @@ module Qlogic.NatSat
   , eval
   ) where
 
+import Control.Monad
 import qualified Control.Monad.State.Lazy as State
 import Qlogic.Formula
 import qualified Qlogic.Assign as A
@@ -41,6 +42,10 @@ import Qlogic.Utils
 data Size = Bits Int
           | Bound Int
           deriving (Show, Typeable)
+
+data ArithHelpVar = ArithHelpVar Int deriving (Eq, Ord, Show, Typeable)
+
+instance PropositionalAtomClass ArithHelpVar
 
 natToBits :: Int -> Int
 -- ^ calculates the necessary length of a list of Top/Bot values for representing
@@ -69,7 +74,7 @@ instance (Eq a, Ord a, Show a, Typeable a, ShowLimit a) => PropositionalAtomClas
 
 type NatAssign a = Map.Map a Int
 
-type NatSetMonad r = State.State (Set.Set PropositionalFormula) r
+type NatSetMonad r = State.State (Set.Set PropositionalFormula, Int) r
 
 emptyAssignment :: NatAssign a
 emptyAssignment = Map.empty
@@ -101,6 +106,10 @@ truncTo _ []                         = []
 truncTo n qs@(_:ps) | length qs <= n = qs
                     | otherwise      = truncTo n ps
 
+freshVar :: NatSetMonad Int
+freshVar = do State.modify $ \ (s, n) -> (s, n + 1)
+              State.get >>= return . snd
+
 (.+.) :: NatFormula -> NatFormula -> NatFormula
 -- ^ performs addition of natural numbers in the representation as a list
 --   of propositional formulas
@@ -117,18 +126,20 @@ ps .+. qs | lengthdiff > 0 = padBots lengthdiff ps .+. qs
 
 mAdd :: NatFormula -> NatFormula -> NatSetMonad NatFormula
 mAdd [] []                  = return []
-mAdd [p] [q]                = do let c = atom (PLVec ([p], [q], False) 1)
+mAdd [p] [q]                = do c <- freshVar >>= return . atom . ArithHelpVar
+--                                  let c = atom (PLVec ([p], [q], False) 1)
                                  let cc = (p &&& q) <-> c
-                                 State.modify $ Set.insert cc
+                                 State.modify $ \ (s, n) -> (Set.insert cc s, n)
                                  return [c, neg (p <-> q)]
 mAdd ps qs | lengthdiff > 0 = mAdd (padBots lengthdiff ps) qs
            | lengthdiff < 0 = mAdd ps $ padBots (-1 * lengthdiff) qs
            | otherwise      = do rs <- mAdd (tail ps) (tail qs)
                                  -- let rs = map (atom . PLVec (ps, qs)) [1..length rs']
                                  let r = head rs
-                                 let c = atom (PLVec ([p], [q]) 1)
+--                                  let c = atom (PLVec ([p], [q]) 1)
+                                 c <- freshVar >>= return . atom . ArithHelpVar
                                  let cc = (twoOrThree p q r) <-> c
-                                 State.modify $ Set.insert cc
+                                 State.modify $ \ (s, n) -> (Set.insert cc s, n)
                                  -- State.modify (`Set.union` (Set.fromList (zipWith (<->) rs rs')))
                                  return $ c : oneOrThree p q r : tail rs
   where lengthdiff = length qs - length ps
@@ -161,8 +172,9 @@ mTimes ps (q:qs) = do let r1 = map (&&& q) ps ++ padBots (length qs) []
                       -- State.modify (`Set.union` (Set.fromList (zipWith (<->) r1 r1')))
                       -- State.modify (`Set.union` (Set.fromList (zipWith (<->) r2 r2')))
                       addres <- mAdd r1 r2
-                      let vs = map (atom . PLVec (ps, qs, True)) [1..length addres]
-                      State.modify (`Set.union` (Set.fromList (zipWith (<->) vs addres)))
+--                       let vs = map (atom . PLVec (ps, qs, True)) [1..length addres]
+                      vs <- mapM (const $ freshVar >>= return . atom . ArithHelpVar) [1..length addres]
+                      State.modify $ \ (s, n) -> (s `Set.union` (Set.fromList (zipWith (<->) vs addres)), n)
                       return vs
 
 bigTimes :: [NatFormula] -> NatFormula

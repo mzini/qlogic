@@ -199,18 +199,24 @@ instance (Decoder e1 a1, Decoder e2 a2) => Decoder (e1 :&: e2) (OneOf a1 a2) whe
   add (Foo a) (e1 :&: e2) = add a e1 :&: e2
   add (Bar b) (e1 :&: e2) = e1 :&: (add b e2)
 
-constructValue :: (Decoder e a, Solver s l) => e -> SatSolver s l e
-constructValue e = {-# SCC "constructValue" #-} State.get >>= (liftS . Map.foldWithKey f (return e))
-  where f atm v m = case extract atm of
-                      Just a -> getModelValue v >>= \ val -> if val then add a `liftM` m else m
-                      Nothing -> m
+constructValue :: (Decoder e a, MonadIO s, Solver s l) => e -> SatSolver s l e
+constructValue e = do s <- State.get >>= liftIO . Hash.toList
+                      ht <- State.get >>= liftIO . Hash.longestChain
+                      liftIO $ putStrLn $ "Longest Chain in Hastable: " ++ show (length ht)
+                      foldl f (return e) s
+  where f m (a, v) = case extract a of
+                       Just a' -> case lit v of
+                                    Lit v' -> lift (getModelValue v') >>= \ val -> if val then add a' `liftM` m else m
+                                    _ -> m
+                       Nothing -> m
 
 ifM :: Monad m =>  m Bool -> m a -> m a -> m a
 ifM mc mt me = do c <- mc
                   if c then mt else me
 
-run_ :: (Solver s l) => SatSolver s l r -> IO r
-run_ (SatSolver m) = run $ State.evalStateT m Map.empty
+run_ :: (Monad s, SatMonad s) => SatSolver s l r -> IO r
+run_ m = do s <- Hash.new (==) (Hash.hashString . {-# SCC "showlimit" #-} showlimit 7)
+            run $ State.evalStateT m s
 
 value :: (Decoder e a, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)
 value m p = run_ $ m >> ifM (liftS solve) (Just `liftM` constructValue p) (return Nothing)
