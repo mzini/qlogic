@@ -18,6 +18,7 @@ library
                     Qlogic.Diophantine
                     Qlogic.Cnf
                     Qlogic.Utils
+                    Qlogic.MemoizedFormula
 
  other-modules:     Sat
                     Name
@@ -44,7 +45,7 @@ library
  hs-source-dirs:    .
                     Folkung/Haskell
 
- ghc-options:       -O2
+ ghc-options:       -O2 -fvia-C
 
 executable qlogic-test
  main-is:           Qlogic/Test/Main.hs
@@ -81,4 +82,4 @@ executable qlogic-test
                     GeneralizedNewtypeDeriving
                     OverlappingInstances
 
- ghc-options:       -O2
+ ghc-options:       -O2 -fvia-C
