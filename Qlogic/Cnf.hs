@@ -26,7 +26,7 @@ where
 import Prelude hiding (foldr)
 import qualified Data.List as List
 
-import Qlogic.Formula (Formula(..), PropositionalFormula, PropositionalAtom)
+import Qlogic.Formula (Formula(..))
 
 data Literal a = PosLit !a -- ^ positive literal
                | NegLit !a -- ^ negative literal

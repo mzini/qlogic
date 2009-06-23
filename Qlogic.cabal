@@ -16,9 +16,9 @@ library
                     Qlogic.SatSolver
                     Qlogic.NatSat
                     Qlogic.Diophantine
-                    Qlogic.Cnf
                     Qlogic.Utils
                     Qlogic.MemoizedFormula
+                    Qlogic.PropositionalFormula
 
  other-modules:     Sat
                     Name
@@ -47,39 +47,40 @@ library
 
  ghc-options:       -O2 -fvia-C
 
-executable qlogic-test
- main-is:           Qlogic/Test/Main.hs
+-- executable qlogic-test
+--  main-is:           Qlogic/Test/Main.hs
 
- build-depends:     containers, mtl, base>=4.0.0.0, QuickCheck, pretty, syb
+--  build-depends:     containers, mtl, base>=4.0.0.0, QuickCheck, pretty, syb
 
- other-modules:     Qlogic.Formula
-                    Qlogic.Assign
-                    Qlogic.SatSolver
-                    Qlogic.NatSat
-                    Qlogic.Diophantine
-                    Qlogic.Cnf
-                    Qlogic.Utils
-                    Sat
-                    Name
-                    Str
-                    Form
+--  other-modules:     Qlogic.Formula
+--                     Qlogic.Assign
+--                     Qlogic.SatSolver
+--                     Qlogic.NatSat
+--                     Qlogic.Diophantine
+--                     Qlogic.PropositionalFormula
+-- --                    Qlogic.Cnf
+--                     Qlogic.Utils
+--                     Sat
+--                     Name
+--                     Str
+--                     Form
 
- hs-source-dirs:    .
-                    Folkung/Haskell
+--  hs-source-dirs:    .
+--                     Folkung/Haskell
 
- extra-lib-dirs:    Folkung/instantiate
-                    Folkung/minisat/mtl
-                    Folkung/minisat/current-base
+--  extra-lib-dirs:    Folkung/instantiate
+--                     Folkung/minisat/mtl
+--                     Folkung/minisat/current-base
 
- extra-libraries:   stdc++
-                    instantiate
-                    minisat
+--  extra-libraries:   stdc++
+--                     instantiate
+--                     minisat
 
- extensions:        CPP
-                    ForeignFunctionInterface
-                    Generics
-                    TypeOperators
-                    GeneralizedNewtypeDeriving
-                    OverlappingInstances
+--  extensions:        CPP
+--                     ForeignFunctionInterface
+--                     Generics
+--                     TypeOperators
+--                     GeneralizedNewtypeDeriving
+--                     OverlappingInstances
 
- ghc-options:       -O2 -fvia-C
+--  ghc-options:       -O2 -fvia-C

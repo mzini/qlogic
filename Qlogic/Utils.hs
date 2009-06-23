@@ -1,7 +1,14 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Qlogic.Utils where
 
 class ShowLimit a where
   showlimit :: Int -> a -> String
+
+instance Show a => ShowLimit a where
+  showlimit n _ | n <= 0 = ""
+  showlimit n a          = show a
 
 instance (ShowLimit a, ShowLimit b) => ShowLimit (a, b) where
   showlimit n _ | n <= 0 = ""
