@@ -4,10 +4,21 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Qlogic.SatSolver where
+module Qlogic.SatSolver 
+    (
+     SatSolver(..)
+    , Solver(..)
+    , Clause(..)
+    , Decoder(..)
+    , (:&:) (..)
+    , addFormula
+    , value
+    , freshLit
+    )
+where
 
 import Control.Monad
-import Control.Monad.Trans (lift, MonadIO)
+import Control.Monad.Trans (lift)
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Map as Map
 import Data.Typeable
@@ -16,7 +27,6 @@ import Prelude hiding (negate)
 
 import Qlogic.Formula
 import Qlogic.PropositionalFormula
-import qualified Sat as Sat
 
 newtype Clause l = Clause {clauseToList :: [l]}
 
@@ -28,17 +38,6 @@ class Monad s => Solver s l | s -> l where
     addClause     :: Clause l -> s Bool
     getModelValue :: l -> s Bool
 
-instance MonadIO Sat.S where
-  liftIO = Sat.lift
-
-instance Solver Sat.S Sat.Lit where
-    solve         = Sat.solve []
-    run           = Sat.run
-    newLit        = Sat.newLit
-    negate        = return . Sat.neg
-    addClause     = Sat.addClause . clauseToList
-    getModelValue = Sat.getModelValue
-
 class Solver s l => IncrementalSolver s l where
     okay :: s () -> s Bool
 
@@ -48,8 +47,6 @@ data Polarity = PosPol | NegPol
 
 newtype SatSolver s l r = SatSolver {runSolver :: State.StateT (Map.Map PA l) s r} 
     deriving (Monad, StateClass.MonadState (Map.Map PA l))
-
-type MiniSat r = SatSolver Sat.S Sat.Lit r
 
 liftS :: Solver s l => s r -> SatSolver s l r 
 liftS = SatSolver . lift

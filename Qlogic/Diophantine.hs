@@ -64,6 +64,8 @@ class PropAtom a => DioVarClass a where
   fromDioVar :: DioVar -> Maybe a
   fromDioVar (DioVar a) = cast a
 
+instance PropAtom a => DioVarClass a
+
 instance ShowLimit a => ShowLimit (DioAtom a) where
   showlimit n _ | n <= 0 = ""
   showlimit n (Grt a b)  = "Grt " ++ showlimit (n - 1) a ++ showlimit (n - 1) b
