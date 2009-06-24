@@ -15,6 +15,7 @@ library
                     Qlogic.Assign
                     Qlogic.SatSolver
                     Qlogic.NatSat
+                    Qlogic.Boolean
                     Qlogic.Diophantine
                     Qlogic.Utils
                     Qlogic.MemoizedFormula
