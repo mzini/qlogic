@@ -63,9 +63,9 @@ instance (Eq a, Eq l) => Boolean (Formula l a) where
     not (Neg a) = a
     not a       = Neg a
 
-    top = top
+    top = Top
 
-    bot = bot
+    bot = Bot
 
     Top <-> b   = b
     Bot <-> b   = not b

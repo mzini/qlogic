@@ -14,13 +14,17 @@ module Qlogic.SatSolver
     , addFormula
     , value
     , freshLit
+    , getAssign
+    , runSolver
     )
 where
 
 import Control.Monad
-import Control.Monad.Trans (lift)
+import Control.Monad.Trans (lift, liftIO)
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Map as Map
+import qualified Qlogic.Assign as Assign
+import Qlogic.Assign (Assign, (|->))
 import Data.Typeable
 import qualified Control.Monad.State.Class as StateClass
 import Prelude hiding (negate)
@@ -45,7 +49,7 @@ data ExtLit l = Lit !l | TopLit | BotLit deriving Eq
 
 data Polarity = PosPol | NegPol
 
-newtype SatSolver s l r = SatSolver {runSolver :: State.StateT (Map.Map PA l) s r} 
+newtype SatSolver s l r = SatSolver (State.StateT (Map.Map PA l) s r)
     deriving (Monad, StateClass.MonadState (Map.Map PA l))
 
 liftS :: Solver s l => s r -> SatSolver s l r 
@@ -131,6 +135,8 @@ addPositively fm@(a `Imp` b) =
      return p
 addPositively fm@(Neg a) = addNegatively a >>= negateELit
 addPositively fm@(A _) = plit fm
+addPositively fm@(SL l) = plit fm
+
 addPositively Top = return TopLit
 addPositively Bot = return BotLit
 
@@ -172,6 +178,7 @@ addNegatively fm@(a `Imp` b) =
      return p
 addNegatively fm@(Neg a) = addPositively a >>= negateELit
 addNegatively fm@(A _) = plit fm
+addNegatively fm@(SL l) = plit fm
 addNegatively Top = return TopLit
 addNegatively Bot = return BotLit
 
@@ -204,11 +211,20 @@ constructValue e = State.get >>= (liftS . Map.foldWithKey f (return e))
                       Just a -> getModelValue v >>= \ val -> if val then add a `liftM` m else m
                       Nothing -> m
 
+getAssign :: (Ord l, Solver s l) => SatSolver s l (Assign l)
+getAssign = State.get >>= Map.foldWithKey f (return Assign.empty)
+    where f k l m  = do assign <- m
+                        v <- liftS $ getModelValue l
+                        return $ Assign.add [Right k |-> v] assign
+
 ifM :: Monad m =>  m Bool -> m a -> m a -> m a
 ifM mc mt me = do c <- mc
                   if c then mt else me
-run_ :: (Solver s l) => SatSolver s l r -> IO r
-run_ (SatSolver m) = run $ State.evalStateT m Map.empty
+
+runSolver :: (Solver s l) => SatSolver s l r -> IO r
+runSolver (SatSolver m) = run $ State.evalStateT m Map.empty
+
+
 
 value :: (Decoder e a, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)
-value m p = run_ $ m >> ifM (liftS solve) (Just `liftM` constructValue p) (return Nothing)
+value m p = runSolver $ m >> ifM (liftS solve) (Just `liftM` constructValue p) (return Nothing)
