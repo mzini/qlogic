@@ -42,7 +42,6 @@ class Boolean a where
 
 class Boolean f => NGBoolean f a | f -> a where
     atom :: a -> f
-    isAtom :: f -> Bool
 
 instance Boolean Bool where
   (&&) = (Prelude.&&)

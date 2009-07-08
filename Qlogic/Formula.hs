@@ -93,13 +93,6 @@ instance (Eq a, Eq l) => Boolean (Formula l a) where
 instance (Eq a, Eq l) => NGBoolean (Formula l a) a where
     atom = A
 
-    isAtom Top    = True
-    isAtom Bot    = True
-    isAtom (A a)  = True
-    isAtom (SL a) = True
-    isAtom _      = False
-
-
 literal :: l -> Formula l a
 literal = SL
 

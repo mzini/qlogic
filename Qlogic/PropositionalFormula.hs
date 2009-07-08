@@ -42,3 +42,4 @@ instance PropAtom PA
 
 propAtom :: (Eq l, PropAtom a) => a -> PropFormula l
 propAtom = atom . PA
+

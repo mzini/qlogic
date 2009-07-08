@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -5,7 +6,8 @@
 module Qlogic.MemoizedFormula 
     ( toFormula 
     , memoized
-    , MemoFormula)
+    , MemoFormula
+    , Memo)
 where 
 
 import Qlogic.SatSolver
@@ -16,6 +18,7 @@ import Qlogic.SatSolver
 import Control.Monad
 import qualified Sat as Sat
 import qualified Control.Monad.State.Lazy as State
+import qualified Control.Monad.State.Class as StateClass
 import Control.Monad.Trans (lift)
 import qualified Data.Map as Map
 import Prelude hiding ((&&),(||),not,foldl,foldr)
@@ -33,7 +36,10 @@ data MemoState arg l = St {
     , cache :: Cache arg l
     }
 
-type Memo arg s l r = State.StateT (MemoState arg l) (SatSolver s l) r
+newtype Memo arg s l r = Memo {
+      runMemo:: State.StateT (MemoState arg l) (SatSolver s l) r
+    } deriving (Monad, StateClass.MonadState (MemoState arg l))
+
 type MemoFormula arg s l = Memo arg s l (PropFormula l)
 
 initialState :: MemoState arg l
@@ -49,8 +55,8 @@ addConj :: Monad s => PropFormula l -> Memo args s l ()
 addConj fm = State.modify $ \ st -> st { conjs = fm : conjs st}
 
 toFormula :: (Solver s l, Eq l) => MemoFormula arg s l -> SatSolver s l (PropFormula l)
-toFormula fm = do (f, st) <- State.runStateT fm initialState
-                  return $ f && (bigAnd $ conjs st)
+toFormula (Memo fm) = do (f, st) <- State.runStateT fm initialState
+                         return $ f && (bigAnd $ conjs st)
 
 memoized :: (Solver s l, Ord arg, Eq l) => 
            (arg -> MemoFormula arg s l) -> arg -> MemoFormula arg s l
@@ -62,11 +68,13 @@ memoized f arg = do c <- getCache
                       (Nothing    , newC) -> modifyCache (const newC) >> maybeAddConj newASt fm >> return (fml newASt)
     where maybeAddConj (IsFmt l) fm = addConj $ literal l --> fm
           maybeAddConj _         _  = return ()
+--          mkASt :: Monad s => PropFormula l -> Memo arg s l (ASt l)
           mkASt Top    = return IsTop
           mkASt Bot    = return IsBot
           mkASt (A a)  = return $ IsAtom a
           mkASt (SL l) = return $ IsLit l
-          mkASt fm     = do l <- lift freshLit 
+          mkASt fm     = Memo $ 
+                         do l <- lift freshLit 
                             return $ IsFmt l
           fml IsTop      = Top
           fml IsBot      = Bot
@@ -84,4 +92,6 @@ instance (Monad s, Eq l) => Boolean (MemoFormula arg s l) where
     (-->) = liftM2 (-->)
     ite = liftM3 ite
                                                          
+instance (Monad s, Eq l, PropAtom a) => NGBoolean (MemoFormula arg s l) a where
+    atom = return . propAtom
     

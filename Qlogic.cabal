@@ -18,7 +18,6 @@ library
                     Qlogic.NatSat
                     Qlogic.Boolean
                     Qlogic.Diophantine
-                    Qlogic.Utils
                     Qlogic.MemoizedFormula
                     Qlogic.PropositionalFormula
 
@@ -26,6 +25,7 @@ library
                     Name
                     Str
                     Form
+                    Qlogic.Utils
 
  build-depends:     containers, mtl, base>=4.0.0.0, pretty, syb
 
