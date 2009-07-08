@@ -66,7 +66,7 @@ memoized f arg = do c <- getCache
                     case Map.insertLookupWithKey (\ _ _ oldASt -> oldASt) arg newASt c of
                       (Just oldASt, _   ) -> return $ fml oldASt
                       (Nothing    , newC) -> modifyCache (const newC) >> maybeAddConj newASt fm >> return (fml newASt)
-    where maybeAddConj (IsFmt l) fm = addConj $ literal l --> fm
+    where maybeAddConj (IsFmt l) fm = addConj $ literal l <-> fm
           maybeAddConj _         _  = return ()
 --          mkASt :: Monad s => PropFormula l -> Memo arg s l (ASt l)
           mkASt Top    = return IsTop
@@ -80,6 +80,7 @@ memoized f arg = do c <- getCache
           fml IsBot      = Bot
           fml (IsAtom a) = atom a
           fml (IsFmt f ) = literal f
+          fml (IsLit l)  = literal l
 
 
 instance (Monad s, Eq l) => Boolean (MemoFormula arg s l) where
