@@ -1,13 +1,15 @@
+{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
+
 module Qlogic.PropositionalFormula where
 import Qlogic.Utils
 import qualified Qlogic.Formula as Fm
 import Qlogic.Boolean
 import Data.Typeable
 
-class (Eq a, Ord a, Show a, ShowLimit a, Typeable a) => PropAtom a
+class (Eq a, Ord a, Show a, Typeable a) => PropAtom a
   -- where
   --           toPropositionalAtom :: a -> PropositionalAtom
   --           toPropositionalAtom = PropositionalAtom
@@ -32,13 +34,7 @@ instance Ord PA where
   compare = compare_
 
 instance Show PA where
-  show (PA a) = "PropositionalAtom " ++ show  a
-
-instance ShowLimit PA where
-  showlimit n _ | n <= 0            = ""
-  showlimit n (PA a) = "PA " ++ showlimit (n - 1) a
-
-instance PropAtom PA
+  show (PA a) = "PA " ++ show  a
 
 propAtom :: (Eq l, PropAtom a) => a -> PropFormula l
 propAtom = atom . PA

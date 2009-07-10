@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Qlogic.NatSat
@@ -69,11 +70,11 @@ type NatFormula l = [PropFormula l]
 data PLVec a = PLVec a Int
   deriving (Eq, Ord, Show, Typeable)
 
-instance ShowLimit a => ShowLimit (PLVec a) where
-  showlimit n _ | n <= 0  = ""
-  showlimit n (PLVec a i) = "PLVec " ++ showlimit (n - 1) a ++ show i
+-- instance ShowLimit a => ShowLimit (PLVec a) where
+--   showlimit n _ | n <= 0  = ""
+--   showlimit n (PLVec a i) = "PLVec " ++ showlimit (n - 1) a ++ show i
 
-instance (Eq a, Ord a, Show a, Typeable a, ShowLimit a) => PropAtom (PLVec a)
+instance (Eq a, Ord a, Show a, Typeable a) => PropAtom (PLVec a)
 
 type NatAssign a = Map.Map a Int
 

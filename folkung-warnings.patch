@@ -1,5 +1,0 @@
-1c1
-< {-# OPTIONS -fgenerics #-}
----
-> {-# LANGUAGE Generics #-}
-

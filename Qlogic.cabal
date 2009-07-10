@@ -21,68 +21,8 @@ library
                     Qlogic.MemoizedFormula
                     Qlogic.PropositionalFormula
 
- other-modules:     Sat
-                    Name
-                    Str
-                    Form
-                    Qlogic.Utils
+ other-modules:     Qlogic.Utils
 
- build-depends:     containers, mtl, base>=4.0.0.0, pretty, syb
-
- extensions:        CPP
-                    ForeignFunctionInterface
-                    Generics
-                    TypeOperators
-                    GeneralizedNewtypeDeriving
-                    OverlappingInstances
-
- extra-lib-dirs:    Folkung/instantiate
-                    Folkung/minisat/mtl
-                    Folkung/minisat/current-base
-
- extra-libraries:   stdc++
-                    instantiate
-                    minisat
-
- hs-source-dirs:    .
-                    Folkung/Haskell
+ build-depends:     containers, mtl, base>=4.0.0.0, pretty, syb, folkung
 
  ghc-options:       -O2 -fvia-C
-
--- executable qlogic-test
---  main-is:           Qlogic/Test/Main.hs
-
---  build-depends:     containers, mtl, base>=4.0.0.0, QuickCheck, pretty, syb
-
---  other-modules:     Qlogic.Formula
---                     Qlogic.Assign
---                     Qlogic.SatSolver
---                     Qlogic.NatSat
---                     Qlogic.Diophantine
---                     Qlogic.PropositionalFormula
--- --                    Qlogic.Cnf
---                     Qlogic.Utils
---                     Sat
---                     Name
---                     Str
---                     Form
-
---  hs-source-dirs:    .
---                     Folkung/Haskell
-
---  extra-lib-dirs:    Folkung/instantiate
---                     Folkung/minisat/mtl
---                     Folkung/minisat/current-base
-
---  extra-libraries:   stdc++
---                     instantiate
---                     minisat
-
---  extensions:        CPP
---                     ForeignFunctionInterface
---                     Generics
---                     TypeOperators
---                     GeneralizedNewtypeDeriving
---                     OverlappingInstances
-
---  ghc-options:       -O2 -fvia-C

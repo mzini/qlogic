@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -66,18 +67,18 @@ class PropAtom a => DioVarClass a where
 
 instance PropAtom a => DioVarClass a
 
-instance ShowLimit a => ShowLimit (DioAtom a) where
-  showlimit n _ | n <= 0 = ""
-  showlimit n (Grt a b)  = "Grt " ++ showlimit (n - 1) a ++ showlimit (n - 1) b
-  showlimit n (Equ a b)  = "Grt " ++ showlimit (n - 1) a ++ showlimit (n - 1) b
+-- instance ShowLimit a => ShowLimit (DioAtom a) where
+--   showlimit n _ | n <= 0 = ""
+--   showlimit n (Grt a b)  = "Grt " ++ showlimit (n - 1) a ++ showlimit (n - 1) b
+--   showlimit n (Equ a b)  = "Grt " ++ showlimit (n - 1) a ++ showlimit (n - 1) b
 
-instance ShowLimit a => ShowLimit (DioMono a) where
-  showlimit n _ | n <= 0     = ""
-  showlimit n (DioMono c vs) = "DioMono " ++ show n ++ " " ++ showlimit n vs
+-- instance ShowLimit a => ShowLimit (DioMono a) where
+--   showlimit n _ | n <= 0     = ""
+--   showlimit n (DioMono c vs) = "DioMono " ++ show n ++ " " ++ showlimit n vs
 
-instance ShowLimit a => ShowLimit (VPower a) where
-  showlimit n _ | n <= 0   = ""
-  showlimit n (VPower a e) = "VPower " ++ showlimit (n - 1) a ++ " " ++ show e
+-- instance ShowLimit a => ShowLimit (VPower a) where
+--   showlimit n _ | n <= 0   = ""
+--   showlimit n (VPower a e) = "VPower " ++ showlimit (n - 1) a ++ " " ++ show e
 
 type DioFormula l a = Formula l (DioAtom a) 
 
@@ -96,9 +97,9 @@ instance Eq DioVar where
 instance Ord DioVar where
   compare = {-# SCC "DioVarOrd" #-} compareDioVar
 
-instance ShowLimit DioVar where
-  showlimit n _ | n <= 0 = ""
-  showlimit n (DioVar a) = "DioVar " ++ showlimit (n - 1) a
+-- instance ShowLimit DioVar where
+--   showlimit n _ | n <= 0 = ""
+--   showlimit n (DioVar a) = "DioVar " ++ showlimit (n - 1) a
 
 instance PropAtom DioVar
 
