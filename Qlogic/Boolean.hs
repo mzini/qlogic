@@ -50,6 +50,16 @@ instance Boolean Bool where
   top = True
   bot = False
 
+liftF :: (b -> b -> b) -> (a -> b) -> (a -> b) -> (a -> b)
+liftF o f1 f2 = \a -> f1 a `o` f2 a
+
+instance Boolean b => Boolean (a -> b) where
+  (&&)  = liftF (&&)
+  (||)  = liftF (||)
+  not f = not . f
+  top   = const top
+  bot   = const bot
+
 fm :: Boolean a => Bool -> a
 fm True  = top
 fm False = bot
