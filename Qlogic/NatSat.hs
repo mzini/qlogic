@@ -51,6 +51,12 @@ data Size = Bits Int
           | Bound Int
           deriving (Show, Typeable)
 
+instance Eq Size where
+  a == b = bound a == bound b
+
+instance Ord Size where
+  compare a b = compare (bound a) (bound b)
+
 natToBits :: Int -> Int
 -- ^ calculates the necessary length of a list of Top/Bot values for representing
 --   the given natural number
@@ -65,6 +71,10 @@ bits (Bound n) = natToBits n
 
 bound (Bits n) = bitsToNat n
 bound (Bound n) = n
+
+increment :: Size -> Size
+increment (Bits n)  = Bits $ n + 1
+increment (Bound n) = Bound $ 2 * n + 1
 
 type NatFormula l = [PropFormula l]
 data PLVec a = PLVec a Int
