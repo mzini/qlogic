@@ -26,7 +26,7 @@ import qualified Data.Map as Map
 import Prelude hiding ((&&),(||),not,foldl,foldr)
 
 data MemoState arg l = St {
-      conjs :: [PropFormula l]
+      conjs :: [(l, PropFormula l)]
     , lits :: Map.Map arg l
     } deriving (Show)
 
@@ -52,8 +52,8 @@ cachedLiteral arg = do st <- State.get
                                                return $ Fresh l;
                                              }
 
-require :: Monad s => PropFormula l -> Memo arg s l ()
-require fm = State.modify $ \ st -> st { conjs = fm : conjs st}
+require :: Monad s => l -> PropFormula l -> Memo arg s l ()
+require l fm = State.modify $ \ st -> st { conjs = (l,fm) : conjs st}
 
 memoized :: (Solver s l, Ord arg, Eq l) => 
            (arg -> MemoFormula arg s l) -> arg -> MemoFormula arg s l
@@ -61,22 +61,16 @@ memoized f arg = do ll <- cachedLiteral arg
                     case ll of 
                       Old l   -> return $ literal l
                       Fresh l -> do { fml <- f arg; 
-                                     require $ literal l <-> fml;
+                                     require l fml;
                                      return $ literal l
                                    }
 
 
 
-toFormula :: (Solver s l, Eq l, State.MonadIO s) => MemoFormula arg s l -> SatSolver s l (PropFormula l)
+-- toFormula :: (Solver s l, Eq l, State.MonadIO s) => MemoFormula arg s l -> SatSolver s l (PropFormula l)
 toFormula (Memo fm) = do (f, st) <- State.runStateT fm initialState
-                         return $ f && (bigAnd $ conjs st)
-    -- where debug st f = liftS $ liftIO 
-    --                    ((putStrLn $ show $ lits st) 
-    --                     >> (putStrLn "") >> (putStrLn $ show $ Map.size (lits st))
-    --                     >> (putStrLn "") >> (putStrLn $ show (conjs st))
-    --                     >> (putStrLn "") >> (putStrLn $ show $ length (conjs st))
-    --                     >> (putStrLn "") >> (putStrLn $ show f)
-    --                     >> (putStrLn "----------------------------------------------------------------------"))
+                         mapM (uncurry fix) $ conjs st
+                         return $ f
                                       
 instance (Monad s, Eq l) => Boolean (MemoFormula arg s l) where
     (&&) = liftM2 (&&)
