@@ -4,11 +4,13 @@
 module Qlogic.MiniSat where
 
 import Control.Monad
-import Control.Monad.Trans (lift)
+import Control.Monad.Trans (lift, MonadIO(..))
 import qualified Sat as Sat
 import Qlogic.SatSolver
-
 type MiniSatSolver = Sat.S
+
+instance MonadIO MiniSatSolver where 
+    liftIO = Sat.lift
 type MiniSatLiteral = Sat.Lit
 instance Solver MiniSatSolver MiniSatLiteral where
     solve         = Sat.solve []

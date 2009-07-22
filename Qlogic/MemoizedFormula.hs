@@ -11,6 +11,7 @@ module Qlogic.MemoizedFormula
     , Memo)
 where 
 
+import System.IO.Unsafe (unsafePerformIO)
 import Qlogic.SatSolver
 import Qlogic.Formula 
 import Qlogic.Boolean
@@ -20,22 +21,14 @@ import Control.Monad
 import qualified Sat as Sat
 import qualified Control.Monad.State.Lazy as State
 import qualified Control.Monad.State.Class as StateClass
-import Control.Monad.Trans (lift)
+import Control.Monad.Trans
 import qualified Data.Map as Map
 import Prelude hiding ((&&),(||),not,foldl,foldr)
 
-data ASt l = IsTop
-           | IsBot
-           | IsAtom PA 
-           | IsLit l
-           | IsFmt l
-
-type Cache arg l = Map.Map arg (ASt l)
-
 data MemoState arg l = St {
       conjs :: [PropFormula l]
-    , cache :: Cache arg l
-    }
+    , lits :: Map.Map arg l
+    } deriving (Show)
 
 newtype Memo arg s l r = Memo {
       runMemo:: State.StateT (MemoState arg l) (SatSolver s l) r
@@ -46,44 +39,45 @@ type MemoFormula arg s l = Memo arg s l (PropFormula l)
 initialState :: MemoState arg l
 initialState = St [] Map.empty
 
-modifyCache :: Monad s => (Cache arg l -> Cache arg l) -> Memo arg s l ()
-modifyCache f = State.modify $ \ st -> st { cache = f (cache st)}
+data L l = Fresh l
+         | Old l
 
-getCache :: Monad s => Memo arg s l (Cache arg l)
-getCache = cache `liftM` State.get
+cachedLiteral :: (Solver s l, Monad s, Ord arg) => arg -> Memo arg s l (L l)
+cachedLiteral arg = do st <- State.get
+                       let ls = lits st
+                       l <- Memo $ lift freshLit; 
+                       case Map.insertLookupWithKey (\ _ _ old -> old) arg l ls of
+                         (Just old, _)  -> return $ Old old
+                         (Nothing, ls') -> do { State.put st{lits = Map.insert arg l ls}; 
+                                               return $ Fresh l;
+                                             }
 
-addConj :: Monad s => PropFormula l -> Memo args s l ()
-addConj fm = State.modify $ \ st -> st { conjs = fm : conjs st}
-
-toFormula :: (Solver s l, Eq l) => MemoFormula arg s l -> SatSolver s l (PropFormula l)
-toFormula (Memo fm) = do (f, st) <- State.runStateT fm initialState
-                         return $ f && (bigAnd $ conjs st)
+require :: Monad s => PropFormula l -> Memo arg s l ()
+require fm = State.modify $ \ st -> st { conjs = fm : conjs st}
 
 memoized :: (Solver s l, Ord arg, Eq l) => 
            (arg -> MemoFormula arg s l) -> arg -> MemoFormula arg s l
-memoized f arg = do c <- getCache
-                    fm <- f arg
-                    newASt <- mkASt fm
-                    case Map.insertLookupWithKey (\ _ _ oldASt -> oldASt) arg newASt c of
-                      (Just oldASt, _   ) -> return $ fml oldASt
-                      (Nothing    , newC) -> modifyCache (const newC) >> maybeAddConj newASt fm >> return (fml newASt)
-    where maybeAddConj (IsFmt l) fm = addConj $ literal l <-> fm
-          maybeAddConj _         _  = return ()
---          mkASt :: Monad s => PropFormula l -> Memo arg s l (ASt l)
-          mkASt Top    = return IsTop
-          mkASt Bot    = return IsBot
-          mkASt (A a)  = return $ IsAtom a
-          mkASt (SL l) = return $ IsLit l
-          mkASt fm     = Memo $ 
-                         do l <- lift freshLit 
-                            return $ IsFmt l
-          fml IsTop      = Top
-          fml IsBot      = Bot
-          fml (IsAtom a) = atom a
-          fml (IsFmt f ) = literal f
-          fml (IsLit l)  = literal l
+memoized f arg = do ll <- cachedLiteral arg
+                    case ll of 
+                      Old l   -> return $ literal l
+                      Fresh l -> do { fml <- f arg; 
+                                     require $ literal l <-> fml;
+                                     return $ literal l
+                                   }
 
 
+
+toFormula :: (Solver s l, Eq l, State.MonadIO s) => MemoFormula arg s l -> SatSolver s l (PropFormula l)
+toFormula (Memo fm) = do (f, st) <- State.runStateT fm initialState
+                         return $ f && (bigAnd $ conjs st)
+    -- where debug st f = liftS $ liftIO 
+    --                    ((putStrLn $ show $ lits st) 
+    --                     >> (putStrLn "") >> (putStrLn $ show $ Map.size (lits st))
+    --                     >> (putStrLn "") >> (putStrLn $ show (conjs st))
+    --                     >> (putStrLn "") >> (putStrLn $ show $ length (conjs st))
+    --                     >> (putStrLn "") >> (putStrLn $ show f)
+    --                     >> (putStrLn "----------------------------------------------------------------------"))
+                                      
 instance (Monad s, Eq l) => Boolean (MemoFormula arg s l) where
     (&&) = liftM2 (&&)
     (||) = liftM2 (||)

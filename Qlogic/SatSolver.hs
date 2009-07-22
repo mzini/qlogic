@@ -18,6 +18,8 @@ module Qlogic.SatSolver
     , freshLit
     , getAssign
     , runSolver
+    , liftS
+    , liftIO
     )
 where
 
