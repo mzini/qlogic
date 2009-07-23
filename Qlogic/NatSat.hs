@@ -89,14 +89,14 @@ instance (Eq a, Ord a, Show a, Typeable a) => PropAtom (PLVec a)
 type NatAssign a = Map.Map a Int
 
 
-newtype NatMonad s l r = NatMonad {runNat :: State.StateT [PropFormula l] (SatSolver s l) r} 
+newtype NatMonad s l r = NatMonad {runNat :: State.StateT [PropFormula l] (SatSolver s l) r}
     deriving (Monad, StateClass.MonadState [PropFormula l])
 
 liftN :: Solver s l => SatSolver s l r -> NatMonad s l r
 liftN = NatMonad . lift
 
 runNatMonad :: NatMonad s l r -> SatSolver s l (r, [PropFormula l])
-runNatMonad (NatMonad m) = State.runStateT m [] 
+runNatMonad (NatMonad m) = State.runStateT m []
 
 emptyAssignment :: NatAssign a
 emptyAssignment = Map.empty
@@ -149,7 +149,7 @@ ps .+. qs | lengthdiff > 0 = padBots lengthdiff ps .+. qs
         q          = head qs
         r          = head rs
 
-mAdd :: (Eq l, Ord l, Solver s l) => NatFormula l -> NatFormula l -> NatMonad s l (NatFormula l)
+mAdd :: (Ord l, Solver s l) => NatFormula l -> NatFormula l -> NatMonad s l (NatFormula l)
 -- MA:TODO: l ist nicht typeable, was tun?
 mAdd [] []                  = return []
 mAdd [p] [q]                = do c <- freshVar
@@ -160,9 +160,10 @@ mAdd ps qs | lengthdiff > 0 = mAdd (padBots lengthdiff ps) qs
            | otherwise      = do rs <- mAdd (tail ps) (tail qs)
                                  -- let rs = map (patom . PLVec (ps, qs)) [1..length rs']
                                  let r = head rs
-                                 c <- freshVar
-                                 enforce [(twoOrThree p q r) <-> c]
-                                 return $ c : oneOrThree p q r : tail rs
+                                 c1 <- freshVar
+                                 c2 <- freshVar
+                                 enforce [twoOrThree p q r <-> c1, oneOrThree p q r <-> c2]
+                                 return $ c1 : c2 : tail rs
   where lengthdiff = length qs - length ps
         p          = head ps
         q          = head qs
@@ -181,7 +182,7 @@ ps .*. (q:qs) = r1 .+. r2
   where r1 = map (&& q) ps ++ padBots (length qs) []
         r2 = ps .*. qs
 
-mTimes :: (Eq l, Ord l, Solver s l) => NatFormula l -> NatFormula l -> NatMonad s l (NatFormula l)
+mTimes :: (Ord l, Solver s l) => NatFormula l -> NatFormula l -> NatMonad s l (NatFormula l)
 mTimes _ []      = return []
 mTimes [] _      = return []
 mTimes ps [q]    = do return $ map (&& q) ps
@@ -210,6 +211,18 @@ ps .>. qs | lengthdiff > 0 = padBots lengthdiff ps .>. qs
          p                 = head ps
          q                 = head qs
 
+(.>=.) :: Eq l => NatFormula l -> NatFormula l -> PropFormula l
+-- ^ performs "greater or equal" comparisons of natural numbers in the representation
+--   as a list of propositional formulas
+[] .>=. []                  = Top
+[p] .>=. [q]                = p || not q
+ps .>=. qs | lengthdiff > 0 = padBots lengthdiff ps .>=. qs
+           | lengthdiff < 0 = ps .>=. padBots (-1 * lengthdiff) qs
+           | otherwise      = (p && not q) || ((p <-> q) && (tail ps .>=. tail qs))
+    where lengthdiff        = length qs - length ps
+          p                 = head ps
+          q                 = head qs
+
 (.=.) :: Eq l => NatFormula l -> NatFormula l -> PropFormula l
 -- ^ performs equality comparisons of natural numbers in the representation
 --   as a list of propositional formulas
@@ -228,8 +241,14 @@ natAtom :: (PropAtom a, Eq l) => Size -> a -> NatFormula l
 natAtom size a = nBitVar (bits size) a
 
 nBitVar :: (PropAtom a, Eq l) => Int -> a -> NatFormula l
-nBitVar n v | n > 0     = nBitVar (n - 1) v ++ [propAtom (PLVec v n)]
-            | otherwise = []
+nBitVar n v = nBitVar' 1 n v
+
+-- unsafePerformIO $ do putStrLn $ "nBitVar (" ++ show i ++ ") (" ++ show n ++ ") (" ++ show v ++ ")"
+--                                                   return $ 
+
+nBitVar' :: (PropAtom a, Eq l) => Int -> Int -> a -> NatFormula l
+nBitVar' i n v | i <= n    = propAtom (PLVec v n) : nBitVar' (i + 1) n v
+               | otherwise = []
 
 baseFromVec :: (Ord a, Show a, Typeable a) => PLVec a -> a
 baseFromVec (PLVec x _) = x

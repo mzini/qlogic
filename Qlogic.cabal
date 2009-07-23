@@ -11,7 +11,9 @@ build-type:	    Simple
 
 
 library
- exposed-modules:   Qlogic.Formula
+ exposed-modules:   Qlogic.Arctic
+                    Qlogic.ArcSat
+                    Qlogic.Formula
                     Qlogic.Assign
                     Qlogic.SatSolver
                     Qlogic.MiniSat
@@ -23,6 +25,6 @@ library
 
  other-modules:     Qlogic.Utils
 
- build-depends:     containers, mtl, base>=4.0.0.0, pretty, syb, folkung
+ build-depends:     containers, mtl, base>=4.0.0.0, pretty, syb, folkung, parallel
 
  ghc-options:       -O2 -fvia-C
