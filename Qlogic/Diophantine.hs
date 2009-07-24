@@ -336,7 +336,7 @@ powerToNat n fm@(VPower v m) | m > SR.zero = maybeComputePower fm $
                                                 natComputation (prod pres qres) newmax
                              where newmax        = powerBound n fm
 
-powerToNat n (VPower v m) | otherwise = return zero
+powerToNat n (VPower v m) | otherwise = return one
 
 polyBound :: SR.Semiring b => b -> DioPoly a b -> b
 polyBound n = SR.bigPlus . map (monoBound n)

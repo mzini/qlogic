@@ -5,7 +5,7 @@ module Qlogic.ArcSat where
 import Prelude hiding ((+), max, not, (&&), (||))
 import qualified Prelude as Prelude
 import Data.Typeable
-import Qlogic.Arctic as Arctic
+import Qlogic.Arctic
 import Qlogic.Boolean
 import Qlogic.Formula
 import qualified Qlogic.NatSat as N
@@ -21,7 +21,7 @@ instance (Eq a, Ord a, Show a, Typeable a) => PropAtom (ArcBZVec a)
 arcToBits :: ArcInt -> Int
 arcToBits MinusInf            = 2
 arcToBits (Fin n) | n <= 2    = 2
-                  | otherwise = succ $ arcToBits $ Fin $ n `div` 2
+                  | otherwise = succ $ arcToBits $ Fin $ succ n `div` 2
 
 bitsToArc :: Int -> ArcInt
 bitsToArc n = Fin $ 2 ^ (n - 1)
