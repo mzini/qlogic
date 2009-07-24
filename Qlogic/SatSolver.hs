@@ -121,32 +121,28 @@ addPositively' (p,n) fm@(And as) =
   do plits <- mapM addPositively as
      mapM_ (\l -> addLitClause $ Clause [n, l]) plits
      return p
-addPositively fm@(Or as) = 
-  do (p,n) <- freshELits
-     plits <- mapM addPositively as
+addPositively' (p,n) fm@(Or as) =
+  do plits <- mapM addPositively as
      addLitClause $ Clause $ n:plits
      return p
-addPositively fm@(a `Iff` b) = 
-  do (p,n) <- freshELits
-     apos <- addPositively a
-     aneg <- addNegatively a >>= negateELit 
+addPositively' (p,n) fm@(a `Iff` b) =
+  do apos <- addPositively a
+     aneg <- addNegatively a >>= negateELit
      bpos <- addPositively b
      bneg <- addNegatively b >>= negateELit
      addLitClause $ Clause [n, aneg, bpos]
      addLitClause $ Clause [n, apos, bneg]
      return p
-addPositively fm@(Ite g t e) = 
-  do (p,n) <- freshELits
-     gpos <- addPositively g
+addPositively' (p,n) fm@(Ite g t e) =
+  do gpos <- addPositively g
      gneg <- addNegatively g >>= negateELit
      tpos <- addPositively t
      epos <- addPositively e
      addLitClause $ Clause [n, gneg, tpos]
      addLitClause $ Clause [n, gpos, epos]
      return p
-addPositively fm@(a `Imp` b) = 
-  do (p,n) <- freshELits
-     aneg <- addNegatively a >>= negateELit
+addPositively' (p,n) fm@(a `Imp` b) =
+  do aneg <- addNegatively a >>= negateELit
      bpos <- addPositively b
      addLitClause $ Clause [n, aneg, bpos]
      return p
@@ -163,37 +159,41 @@ addPositively' (_,n) Bot        = addLitClause (Clause [n]) >> return BotLit
 
 
 addNegatively :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l (ExtLit l)
-addNegatively fm@(And as) = 
-  do (p,n) <- freshELits
-     nlits <- mapM (\l -> addNegatively l >>= negateELit) as
+addNegatively fm@(Neg a) = addPositively a >>= negateELit
+addNegatively fm@(A _)   = plit fm
+addNegatively fm@(SL l)  = plit fm
+addNegatively Top        = return TopLit
+addNegatively Bot        = return BotLit
+addNegatively fm         = do (p,n) <- freshELits
+                              addNegatively' (p,n) fm
+
+addNegatively' :: (Eq l, Solver s l) => (ExtLit l, ExtLit l) -> PropFormula l -> SatSolver s l (ExtLit l)
+addNegatively' (p,n) fm@(And as) =
+  do nlits <- mapM (\l -> addNegatively l >>= negateELit) as
      addLitClause $ Clause $ p:nlits
      return p
-addNegatively fm@(Or as) = 
-  do (p,n) <- freshELits
-     nlits <- mapM (\l -> addNegatively l >>= negateELit) as
+addNegatively' (p,n) fm@(Or as) = 
+  do nlits <- mapM (\l -> addNegatively l >>= negateELit) as
      mapM_ (\l -> addLitClause $ Clause [p, l]) nlits
      return p
-addNegatively fm@(a `Iff` b) = 
-  do (p,n) <- freshELits
-     apos <- addPositively a
+addNegatively' (p,n) fm@(a `Iff` b) =
+  do apos <- addPositively a
      aneg <- addNegatively a >>= negateELit
      bpos <- addPositively b
      bneg <- addNegatively b >>= negateELit
      addLitClause $ Clause [p, apos, bpos]
      addLitClause $ Clause [p, aneg, bneg]
      return p
-addNegatively fm@(Ite g t e) = 
-  do p <- freshELit 
-     gpos <- addPositively g
+addNegatively' (p,n) fm@(Ite g t e) =
+  do gpos <- addPositively g
      gneg <- addNegatively g >>= negateELit
      tneg <- addNegatively t >>= negateELit
      eneg <- addNegatively e >>= negateELit
      addLitClause $ Clause [p, gneg, tneg]
      addLitClause $ Clause [p, gpos, eneg]
      return p
-addNegatively fm@(a `Imp` b) = 
-  do p <- freshELit
-     apos <- addPositively a
+addNegatively' (p,n) fm@(a `Imp` b) =
+  do apos <- addPositively a
      bneg <- addNegatively b >>= negateELit
      addLitClause $ Clause [p, apos]
      addLitClause $ Clause [p, bneg]
