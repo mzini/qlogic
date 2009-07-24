@@ -40,6 +40,7 @@ import Qlogic.SatSolver
 import Prelude hiding ((&&), (||), not)
 import Qlogic.Boolean
 import Qlogic.PropositionalFormula
+import qualified Qlogic.Semiring as SR
 import qualified Qlogic.Assign as A
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -50,6 +51,12 @@ import Qlogic.Utils
 data Size = Bits Int
           | Bound Int
           deriving (Show, Typeable)
+
+instance SR.Semiring Int where
+  plus = (+)
+  prod = (*)
+  zero = 0
+  one = 1
 
 instance Eq Size where
   a == b = bound a == bound b

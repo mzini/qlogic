@@ -18,6 +18,14 @@ data ArcBZVec a = InfBit a | BZVec a Int
 
 instance (Eq a, Ord a, Show a, Typeable a) => PropAtom (ArcBZVec a)
 
+arcToBits :: ArcInt -> Int
+arcToBits MinusInf            = 2
+arcToBits (Fin n) | n <= 2    = 2
+                  | otherwise = succ $ arcToBits $ Fin $ n `div` 2
+
+bitsToArc :: Int -> ArcInt
+bitsToArc n = Fin $ 2 ^ (n - 1)
+
 arcToFormula :: Eq l => ArcInt -> ArcFormula l
 arcToFormula MinusInf = (Top, [Bot, Bot])
 arcToFormula (Fin x)  = (Bot, twoComplement x)
@@ -107,14 +115,14 @@ mTimes (a, xs) (b, ys) | lengthdiff > 0 = mTimes (a, padFront' lengthdiff xs) (b
                     | otherwise      = (a <-> b) && bigAnd (zipWith (<->) xs ys)
   where lengthdiff = length ys - length xs
 
-arcAtom :: (Eq l, PropAtom a) => N.Size -> a -> ArcFormula l
-arcAtom size a = nBitVar (N.bits size) a
+-- arcAtom :: (Eq l, PropAtom a) => N.Size -> a -> ArcFormula l
+-- arcAtom size a = nBitVar (N.bits size) a
 
-nBitVar :: (Eq l, PropAtom a) => Int -> a -> ArcFormula l
-nBitVar n v = (propAtom $ InfBit v, nBitVar' 1 n v)
+arcAtom :: (Eq l, PropAtom a) => Int -> a -> ArcFormula l
+arcAtom n v = (propAtom $ InfBit v, arcAtom' 1 n v)
 
-nBitVar' :: (Eq l, PropAtom a) => Int -> Int -> a -> [PropFormula l]
-nBitVar' i n v | i <= n    = propAtom (BZVec v n) : nBitVar' (i Prelude.+ 1) n v
+arcAtom' :: (Eq l, PropAtom a) => Int -> Int -> a -> [PropFormula l]
+arcAtom' i n v | i <= n    = propAtom (BZVec v n) : arcAtom' (i Prelude.+ 1) n v
                | otherwise = []
 
 baseFromVec :: (Ord a, Show a, Typeable a) => ArcBZVec a -> a

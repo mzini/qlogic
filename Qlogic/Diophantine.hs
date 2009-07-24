@@ -4,8 +4,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Qlogic.Diophantine
   (
@@ -19,7 +21,7 @@ module Qlogic.Diophantine
   , DioVarClass(..)
   -- * Operations
   , toFormula
-  , natToPoly
+  , constToPoly
   , varToPoly
   , add
   , bigAdd
@@ -30,11 +32,14 @@ module Qlogic.Diophantine
 
 import Prelude hiding ((&&),(||),not)
 import qualified Prelude as Prelude
-import Qlogic.NatSat
+import qualified Qlogic.Arctic as A
+import qualified Qlogic.ArcSat as AS
+import Qlogic.NatSat hiding (bigPlus)
 import Qlogic.SatSolver hiding (add)
 import Qlogic.Boolean
 import Qlogic.Formula hiding (simplify)
 import Qlogic.PropositionalFormula
+import qualified Qlogic.Semiring as SR
 import Control.Monad
 import Control.Monad.Trans (lift)
 import qualified Control.Monad.State.Lazy as State
@@ -47,18 +52,72 @@ import Qlogic.Utils
 
 data DioVar  = forall a. (DioVarClass a) => DioVar a deriving Typeable
 
-data VPower a  = VPower a Int
-               deriving (Eq, Ord, Show, Typeable)
+data VPower a = VPower a Int
+  deriving (Eq, Ord, Show, Typeable)
 
-data DioMono a = DioMono Int [VPower a]
-               deriving (Eq, Ord, Show, Typeable)
+data DioMono a b = DioMono b [VPower a]
+  deriving (Eq, Ord, Show, Typeable)
 
-type DioPoly a = [DioMono a]
+type DioPoly a b = [DioMono a b]
 
-data DioAtom a = Grt (DioPoly a) (DioPoly a)
-               | Geq (DioPoly a) (DioPoly a)
-               | Equ (DioPoly a) (DioPoly a)
-               deriving (Eq, Ord, Show, Typeable)
+data DioAtom a b = Grt (DioPoly a b) (DioPoly a b)
+                 | Geq (DioPoly a b) (DioPoly a b)
+                 | Equ (DioPoly a b) (DioPoly a b)
+                 deriving (Eq, Ord, Show, Typeable)
+
+class (Solver s l, SizeSemiring b) => MSemiring s l f a b | f -> a, f -> b, f -> s, f -> l, b -> f where
+  plus :: f -> f -> NatMonad s l f
+  plus x y = bigPlus [x, y]
+  prod :: f -> f -> NatMonad s l f
+  prod x y = bigProd [x, y]
+  zero :: f
+  one :: f
+  geq :: f -> f -> PropFormula l
+  grt :: f -> f -> PropFormula l
+  equ :: f -> f -> PropFormula l
+  constToFormula :: b -> f
+  formAtom :: Int -> a -> f
+  truncFormTo :: Int -> f -> f
+  bigPlus :: [f] -> NatMonad s l f
+  bigPlus = foldM plus zero
+  bigProd :: [f] -> NatMonad s l f
+  bigProd = foldM prod one
+
+class SR.Semiring b => SizeSemiring b where
+  sizeToBits :: b -> Int
+  bitsToSize :: Int -> b
+
+instance (Ord l, Solver s l) => MSemiring s l (NatFormula l) DioVar Int where
+  plus = mAdd
+  prod = mTimes
+  zero = natToFormula 0
+  one  = natToFormula 1
+  geq  = (.>=.)
+  grt  = (.>.)
+  equ  = (.=.)
+  constToFormula = natToFormula
+  formAtom n = natAtom (Bits n)
+  truncFormTo = truncTo
+
+instance SizeSemiring Int where
+  sizeToBits n = bits $ Bound n
+  bitsToSize n = bound $ Bits n
+
+instance (Ord l, Solver s l) => MSemiring s l (AS.ArcFormula l) DioVar A.ArcInt where
+  plus = AS.mAdd
+  prod = AS.mTimes
+  zero = AS.arcToFormula A.MinusInf
+  one  = AS.arcToFormula $ A.Fin 0
+  geq  = (AS..>=.)
+  grt  = (AS..>.)
+  equ  = (AS..=.)
+  constToFormula = AS.arcToFormula
+  formAtom = AS.arcAtom
+  truncFormTo = AS.truncTo
+
+instance SizeSemiring A.ArcInt where
+  sizeToBits = AS.arcToBits
+  bitsToSize = AS.bitsToArc
 
 class PropAtom a => DioVarClass a where
   toDioVar :: a -> DioVar
@@ -81,7 +140,7 @@ instance PropAtom a => DioVarClass a
 --   showlimit n _ | n <= 0   = ""
 --   showlimit n (VPower a e) = "VPower " ++ showlimit (n - 1) a ++ " " ++ show e
 
-type DioFormula l a = Formula l (DioAtom a)
+type DioFormula l a b = Formula l (DioAtom a b)
 
 instance Show DioVar where
   show (DioVar a) = "DioVar " ++ show  a
@@ -104,56 +163,56 @@ instance Ord DioVar where
 
 instance PropAtom DioVar
 
-data St l a  = St { vars :: Set.Set a
-                  , formulas :: [PropFormula l]
-                  , polys :: Map.Map (DioPoly a) (NatFormula l)
-                  , monos :: Map.Map (DioMono a) (NatFormula l)
-                  , powers :: Map.Map (VPower a) (NatFormula l)
-                  }
+data St l a b f = St { vars :: Set.Set a
+                     , formulas :: [PropFormula l]
+                     , polys :: Map.Map (DioPoly a b) f
+                     , monos :: Map.Map (DioMono a b) f
+                     , powers :: Map.Map (VPower a) f
+                     }
 
 
-newtype DioMonad s l a r = DioMonad {runDio :: State.StateT (St l a) (SatSolver s l) r}
-    deriving (Monad, StateClass.MonadState (St l a))
+newtype DioMonad s l a b f r = DioMonad {runDio :: State.StateT (St l a b f) (SatSolver s l) r}
+    deriving (Monad, StateClass.MonadState (St l a b f))
 
-liftD :: Solver s l => SatSolver s l r -> DioMonad s l a r
+liftD :: MSemiring s l f a b => SatSolver s l r -> DioMonad s l a b f r
 liftD = DioMonad . lift
 
 
-emptySt :: St l a
+emptySt :: St l a b f
 emptySt = St{vars = Set.empty, formulas = [], polys = Map.empty, monos = Map.empty, powers = Map.empty}
 
-runDioMonad :: Solver s l => DioMonad s l a r -> SatSolver s l (r, St l a)
+runDioMonad :: Solver s l => DioMonad s l a b f r -> SatSolver s l (r, St l a b f)
 runDioMonad (DioMonad m) = State.runStateT m emptySt
 
-getVars :: Solver s l => DioMonad s l a (Set.Set a)
+getVars :: MSemiring s l f a b => DioMonad s l a b f (Set.Set a)
 getVars = vars `liftM` State.get
 
-getPolys :: Solver s l => DioMonad s l a (Map.Map (DioPoly a) (NatFormula l))
+getPolys :: MSemiring s l f a b => DioMonad s l a b f (Map.Map (DioPoly a b) f)
 getPolys = polys `liftM` State.get
 
-getMonos :: Solver s l => DioMonad s l a (Map.Map (DioMono a) (NatFormula l))
+getMonos :: MSemiring s l f a b => DioMonad s l a b f (Map.Map (DioMono a b) f)
 getMonos = monos `liftM` State.get
 
-getPowers :: Solver s l => DioMonad s l a (Map.Map (VPower a) (NatFormula l))
+getPowers :: MSemiring s l f a b => DioMonad s l a b f (Map.Map (VPower a) f)
 getPowers = powers `liftM` State.get
 
 
-setVars :: Solver s l => Set.Set a -> DioMonad s l a ()
+setVars :: MSemiring s l f a b => Set.Set a -> DioMonad s l a b f ()
 setVars set = State.modify $ \s -> s{vars = set}
 
-setPolys :: Solver s l => Map.Map (DioPoly a) (NatFormula l) -> DioMonad s l a ()
+setPolys :: MSemiring s l f a b => Map.Map (DioPoly a b) f -> DioMonad s l a b f ()
 setPolys tbl = State.modify $ \s -> s{polys = tbl}
 
-setMonos :: Solver s l => Map.Map (DioMono a) (NatFormula l) -> DioMonad s l a ()
+setMonos :: MSemiring s l f a b => Map.Map (DioMono a b) f -> DioMonad s l a b f ()
 setMonos tbl = State.modify $ \s -> s{monos = tbl}
 
-setPowers :: Solver s l => Map.Map (VPower a) (NatFormula l) -> DioMonad s l a ()
+setPowers :: MSemiring s l f a b => Map.Map (VPower a) f -> DioMonad s l a b f ()
 setPowers tbl = State.modify $ \s -> s{powers = tbl}
 
-maybeComputePoly :: (PropAtom a, Solver s l)
-                 => DioPoly a
-                 -> DioMonad s l a (NatFormula l)
-                 -> DioMonad s l a (NatFormula l)
+maybeComputePoly :: (PropAtom a, Ord b, MSemiring s l f a b)
+                 => DioPoly a b
+                 -> DioMonad s l a b f f
+                 -> DioMonad s l a b f f
 maybeComputePoly fm m =
   do s <- getPolys
      (case Map.lookup fm s of
@@ -162,10 +221,10 @@ maybeComputePoly fm m =
                       setPolys (Map.insert fm mres s)
                       return mres)
 
-maybeComputeMono :: (PropAtom a, Solver s l)
-                 => DioMono a
-                 -> DioMonad s l a (NatFormula l)
-                 -> DioMonad s l a (NatFormula l)
+maybeComputeMono :: (PropAtom a, Ord b, MSemiring s l f a b)
+                 => DioMono a b
+                 -> DioMonad s l a b f f
+                 -> DioMonad s l a b f f
 maybeComputeMono fm m =
   do s <- getMonos
      (case Map.lookup fm s of
@@ -174,10 +233,10 @@ maybeComputeMono fm m =
                       setMonos (Map.insert fm mres s)
                       return mres)
 
-maybeComputePower :: (PropAtom a, Solver s l)
+maybeComputePower :: (PropAtom a, Ord b, MSemiring s l f a b)
                   => VPower a
-                  -> DioMonad s l a (NatFormula l)
-                  -> DioMonad s l a (NatFormula l)
+                  -> DioMonad s l a b f f
+                  -> DioMonad s l a b f f
 maybeComputePower fm m =
   do s <- getPowers
      (case Map.lookup fm s of
@@ -186,20 +245,20 @@ maybeComputePower fm m =
                       setPowers (Map.insert fm mres s)
                       return mres)
 
-toFormGen :: (Eq l, DioVarClass a, Solver s l)
-          => (Size -> DioPoly a -> DioMonad s l a (NatFormula l))
-          -> Size
-          -> DioFormula l a
-          -> DioMonad s l a (PropFormula l)
+toFormGen :: (Eq l, DioVarClass a, MSemiring s l f a b)
+          => (b -> DioPoly a b -> DioMonad s l a b f f)
+          -> b
+          -> DioFormula l a b
+          -> DioMonad s l a b f (PropFormula l)
 toFormGen f n fm@(A (p `Grt` q)) = do pres <- f n p
                                       qres <- f n q
-                                      return $ pres .>. qres
+                                      return $ pres `grt` qres
 toFormGen f n fm@(A (p `Geq` q)) = do pres <- f n p
                                       qres <- f n q
-                                      return $ pres .>=. qres
+                                      return $ pres `geq` qres
 toFormGen f n fm@(A (p `Equ` q)) = do pres <- f n p
                                       qres <- f n q
-                                      return $ pres .=. qres
+                                      return $ pres `equ` qres
 toFormGen f n fm@(And ps)        = do press <- mapM (toFormGen f n) ps
                                       return $ bigAnd press
 toFormGen f n fm@(Or ps)         = do press <- mapM (toFormGen f n) ps
@@ -219,23 +278,23 @@ toFormGen f n fm@(Neg p)         = do pres <- toFormGen f n p
 toFormGen _ _ Top                = return Top
 toFormGen _ _ Bot                = return Bot
 
-toFormulaGen :: (Eq l, Ord l, DioVarClass a, Solver s l)
-             => (Size -> DioFormula l a -> DioMonad s l a (PropFormula l))
-             -> Size
-             -> DioFormula l a
+toFormulaGen :: (Ord l, DioVarClass a, MSemiring s l f a b)
+             => (b -> DioFormula l a b -> DioMonad s l a b f (PropFormula l))
+             -> b
+             -> DioFormula l a b
              -> SatSolver s l (PropFormula l)
 toFormulaGen f n phi =
     do (r,st) <- runDioMonad (f n phi)
        return $ r && varRestricts st && extraForms st
     where varRestricts st = bigAnd (Set.map (varRestrict n) (vars st))
           extraForms st   = bigAnd $ formulas st
-          varRestrict n v = (natToFormula . bound) n .>=. natAtom n v
+          varRestrict n v = constToFormula n `geq` formAtom (sizeToBits n) v
 
 
 -- Optimisation c of Section 5 in the Fuhs-et-al paper
 -- prunes all "numbers" to their maximum length based on
 -- the assumption that the value of all variables is at most n
-toFormula :: (Ord l, DioVarClass a, Solver s l) => Size -> DioFormula l a -> SatSolver s l (PropFormula l)
+toFormula :: (Ord l, Ord b, DioVarClass a, MSemiring s l f a b) => b -> DioFormula l a b -> SatSolver s l (PropFormula l)
 -- ^ translates a Diophantine constraint into a propositional formula,
 --   where variables are instantiated by values between 0 and n.
 --   this function tracks the maximum value of all subformulas.
@@ -243,86 +302,86 @@ toFormula :: (Ord l, DioVarClass a, Solver s l) => Size -> DioFormula l a -> Sat
 --   maximum values
 toFormula = toFormulaGen toFormula'
 
-toFormula' :: (Eq l, Ord l, DioVarClass a, Solver s l) => Size -> DioFormula l a -> DioMonad s l a (PropFormula l)
+toFormula' :: (Eq l, Ord l, Ord b, DioVarClass a, MSemiring s l f a b) => b -> DioFormula l a b -> DioMonad s l a b f (PropFormula l)
 toFormula' = toFormGen polyToNat
 
 
-natComputation :: Solver s l => NatMonad s l (NatFormula l) -> Size -> DioMonad s l a (NatFormula l)
+natComputation :: MSemiring s l f a b => NatMonad s l f -> b -> DioMonad s l a b f f
 natComputation m b =
     do (r,fms) <- liftD $ runNatMonad m
        State.modify $ \s -> s{formulas = fms ++ formulas s}
-       return $ truncTo (bits b) r
+       return $ truncFormTo (sizeToBits b) r
 
-polyToNat :: (Solver s l, DioVarClass a, Ord l) => Size -> DioPoly a -> DioMonad s l a (NatFormula l)
-polyToNat n []        = return [Bot]
+polyToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => b -> DioPoly a b -> DioMonad s l a b f f
+polyToNat n []        = return zero
 polyToNat n fm@(x:xs) = maybeComputePoly fm $
                         do pres <- monoToNat n x
                            qres <- polyToNat n xs
-                           natComputation (mAdd pres qres) newmax
+                           natComputation (plus pres qres) newmax
     where newmax = polyBound n fm
 
-monoToNat :: (Solver s l, DioVarClass a, Ord l) => Size -> DioMono a -> DioMonad s l a (NatFormula l)
-monoToNat n (DioMono m [])          = return $ natToFormula m
+monoToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => b -> DioMono a b -> DioMonad s l a b f f
+monoToNat n (DioMono m [])          = return $ constToFormula m
 monoToNat n fm@(DioMono m (vp:vps)) = maybeComputeMono fm $
                                       do pres <- powerToNat n vp
                                          qres <- monoToNat n (DioMono m vps)
-                                         natComputation (mTimes pres qres) newmax
+                                         natComputation (prod pres qres) newmax
     where newmax = monoBound n fm
 
-powerToNat :: (Solver s l, DioVarClass a, Ord l) => Size -> VPower a -> DioMonad s l a (NatFormula l)
-powerToNat n fm@(VPower v m) | m > 0  = maybeComputePower fm $
-                                        do State.modify (\s -> s{vars = Set.insert v $ vars s})
-                                           let pres = natAtom n v
-                                           qres <- powerToNat n (VPower v (pred m))
-                                           natComputation (mTimes pres qres) newmax
+powerToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => b -> VPower a -> DioMonad s l a b f f
+powerToNat n fm@(VPower v m) | m > SR.zero = maybeComputePower fm $
+                                             do State.modify (\s -> s{vars = Set.insert v $ vars s})
+                                                let pres = formAtom (sizeToBits n) v
+                                                qres <- powerToNat n (VPower v (pred m))
+                                                natComputation (prod pres qres) newmax
                              where newmax        = powerBound n fm
 
-powerToNat n (VPower v m) | otherwise = return [Top]
+powerToNat n (VPower v m) | otherwise = return zero
 
-polyBound :: Size -> DioPoly a -> Size
-polyBound n = Bound . sum . map (bound . (monoBound n))
+polyBound :: SR.Semiring b => b -> DioPoly a b -> b
+polyBound n = SR.bigPlus . map (monoBound n)
 
-monoBound :: Size -> DioMono a -> Size
-monoBound n (DioMono m xs) = Bound $ foldr ((*) . bound . powerBound n) m xs
+monoBound :: SR.Semiring b => b -> DioMono a b -> b
+monoBound n (DioMono m xs) = foldr (SR.prod . powerBound n) m xs
 
-powerBound :: Size -> VPower a -> Size
-powerBound n (VPower x m) = Bound $ bound n ^ m
+powerBound :: SR.Semiring b => b -> VPower a -> b
+powerBound n (VPower x m) = SR.bigProd $ replicate m n
 
-natToPoly :: Int -> DioPoly a
-natToPoly n = [DioMono n []]
+constToPoly :: b -> DioPoly a b
+constToPoly n = [DioMono n []]
 
-varToPoly :: a -> DioPoly a
-varToPoly v = [DioMono 1 [VPower v 1]]
+varToPoly :: SR.Semiring b => a -> DioPoly a b
+varToPoly v = [DioMono SR.one [VPower v SR.one]]
 
-add :: Eq a => DioPoly a -> DioPoly a -> DioPoly a
+add :: (Eq a, Eq b, SR.Semiring b) => DioPoly a b -> DioPoly a b -> DioPoly a b
 add p = shallowSimp . (++) p
 
-bigAdd :: Eq a => [DioPoly a] -> DioPoly a
+bigAdd :: (Eq a, Eq b, SR.Semiring b) => [DioPoly a b] -> DioPoly a b
 bigAdd = shallowSimp . concat
 
-mult :: Eq a => DioPoly a -> DioPoly a -> DioPoly a
+mult :: (Eq a, Eq b, SR.Semiring b) => DioPoly a b -> DioPoly a b -> DioPoly a b
 mult p = bigAdd . map (pmmult p)
 
-pmmult :: Eq a => DioPoly a -> DioMono a -> DioPoly a
+pmmult :: (Eq a, SR.Semiring b) => DioPoly a b -> DioMono a b -> DioPoly a b
 pmmult p m = map (mmult m) p
 
-mmult :: Eq a => DioMono a -> DioMono a -> DioMono a
-mmult (DioMono m xs) (DioMono n ys) = simpMono $ DioMono (m * n) (xs ++ ys)
+mmult :: (Eq a, SR.Semiring b) => DioMono a b -> DioMono a b -> DioMono a b
+mmult (DioMono m xs) (DioMono n ys) = simpMono $ DioMono (m `SR.prod` n) (xs ++ ys)
 
-bigMult :: Eq a => [DioPoly a] -> DioPoly a
-bigMult = foldr mult (natToPoly 1)
+bigMult :: (Eq a, Eq b, SR.Semiring b) => [DioPoly a b] -> DioPoly a b
+bigMult = foldr mult $ constToPoly SR.one
 
-simplify :: Eq a => DioPoly a -> DioPoly a
+simplify :: (Eq a, Eq b, SR.Semiring b) => DioPoly a b -> DioPoly a b
 simplify = shallowSimp . map simpMono
 
-shallowSimp :: Eq a => DioPoly a -> DioPoly a
+shallowSimp :: (Eq a, Eq b, SR.Semiring b) => DioPoly a b -> DioPoly a b
 shallowSimp [] = []
-shallowSimp ((DioMono n xs):ms) | n == 0    = shallowSimp ms
-shallowSimp ((DioMono n xs):ms) | otherwise = (DioMono (foldl addcoeff n xss) xs):(shallowSimp yss)
+shallowSimp ((DioMono n xs):ms) | n == SR.zero = shallowSimp ms
+shallowSimp ((DioMono n xs):ms) | otherwise    = (DioMono (foldl addcoeff n xss) xs):(shallowSimp yss)
                                   where (xss, yss)               = List.partition (\(DioMono _ xs') -> xs == xs') ms
-                                        addcoeff x (DioMono y _) = x + y
+                                        addcoeff x (DioMono y _) = x `SR.plus` y
 
-simpMono :: Eq a => DioMono a -> DioMono a
+simpMono :: Eq a => DioMono a b -> DioMono a b
 simpMono (DioMono n xs) = DioMono n (simpPower xs)
 
 simpPower :: Eq a => [VPower a] -> [VPower a]
@@ -330,7 +389,7 @@ simpPower [] = []
 simpPower ((VPower v n):xs) | n == 0    = simpPower xs
 simpPower ((VPower v n):xs) | otherwise = (VPower v (foldl addpow n xss)):(simpPower yss)
                                           where (xss, yss)            = List.partition (\(VPower w _) -> v == w) xs
-                                                addpow x (VPower _ y) = x + y
+                                                addpow x (VPower _ y) = x `SR.plus` y
 
 
 -- toFormulaSimp :: DioVarClass a => Size -> DioFormula l a -> PropFormula
