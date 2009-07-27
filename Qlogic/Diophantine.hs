@@ -19,6 +19,8 @@ module Qlogic.Diophantine
   , VPower(..)
   , DioVar(..)
   , DioVarClass(..)
+  , MSemiring(..)
+  , SizeSemiring(..)
   -- * Operations
   , toFormula
   , constToPoly
@@ -87,33 +89,9 @@ class SR.Semiring b => SizeSemiring b where
   sizeToBits :: b -> Int
   bitsToSize :: Int -> b
 
-instance (Ord l, Solver s l) => MSemiring s l (NatFormula l) DioVar Int where
-  plus = mAdd
-  prod = mTimes
-  zero = natToFormula 0
-  one  = natToFormula 1
-  geq  = (.>=.)
-  grt  = (.>.)
-  equ  = (.=.)
-  constToFormula = natToFormula
-  formAtom n = natAtom (Bits n)
-  truncFormTo = truncTo
-
 instance SizeSemiring Int where
   sizeToBits n = bits $ Bound n
   bitsToSize n = bound $ Bits n
-
-instance (Ord l, Solver s l) => MSemiring s l (AS.ArcFormula l) DioVar A.ArcInt where
-  plus = AS.mAdd
-  prod = AS.mTimes
-  zero = AS.arcToFormula A.MinusInf
-  one  = AS.arcToFormula $ A.Fin 0
-  geq  = (AS..>=.)
-  grt  = (AS..>.)
-  equ  = (AS..=.)
-  constToFormula = AS.arcToFormula
-  formAtom = AS.arcAtom
-  truncFormTo = AS.truncTo
 
 instance SizeSemiring A.ArcInt where
   sizeToBits = AS.arcToBits

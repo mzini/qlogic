@@ -20,7 +20,7 @@ instance (Eq a, Ord a, Show a, Typeable a) => PropAtom (ArcBZVec a)
 
 arcToBits :: ArcInt -> Int
 arcToBits MinusInf            = 2
-arcToBits (Fin n) | n <= 2    = 2
+arcToBits (Fin n) | n <= 1    = 1
                   | otherwise = succ $ arcToBits $ Fin $ succ n `div` 2
 
 bitsToArc :: Int -> ArcInt
