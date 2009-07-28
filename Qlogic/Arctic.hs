@@ -31,4 +31,4 @@ Fin x < Fin y    = x Prelude.< y
 (<=) :: ArcInt -> ArcInt -> Bool
 MinusInf <= _     = True
 Fin _ <= MinusInf = False
-Fin x <= Fin y    = x Prelude.< y
+Fin x <= Fin y    = x Prelude.<= y
