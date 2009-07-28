@@ -5,7 +5,7 @@ module Qlogic.ArcSat where
 import Prelude hiding ((+), max, not, (&&), (||))
 import qualified Prelude as Prelude
 import Data.Typeable
-import Qlogic.Arctic
+import Qlogic.Arctic hiding ((<), (<=))
 import Qlogic.Boolean
 import Qlogic.Formula
 import qualified Qlogic.NatSat as N
@@ -18,20 +18,27 @@ data ArcBZVec a = InfBit a | BZVec a Int
 
 instance (Eq a, Ord a, Show a, Typeable a) => PropAtom (ArcBZVec a)
 
+arcToInt :: ArcInt -> Int
+arcToInt MinusInf = 0
+arcToInt (Fin n) = n
+
 arcToBits :: ArcInt -> Int
-arcToBits MinusInf            = 2
-arcToBits (Fin n) | n <= 1    = 1
-                  | otherwise = succ $ arcToBits $ Fin $ succ n `div` 2
+arcToBits MinusInf            = 1
+arcToBits (Fin n) | n == 0    = 1
+                  | n == 1    = 2
+                  | otherwise = succ $ arcToBits $ Fin $ n `div` 2
 
 bitsToArc :: Int -> ArcInt
-bitsToArc n = Fin $ 2 ^ (n - 1)
+bitsToArc n = Fin $ (2 ^ (n - 1)) - 1
 
 arcToFormula :: Eq l => ArcInt -> ArcFormula l
-arcToFormula MinusInf = (Top, [Bot, Bot])
+arcToFormula MinusInf = (Top, [Bot])
 arcToFormula (Fin x)  = (Bot, twoComplement x)
 
 twoComplement :: Eq l => Int -> [PropFormula l]
-twoComplement n | n >= 0    = Bot : N.natToFormula n
+twoComplement n | n== -1    = [Top]
+                | n == 0    = [Bot]
+                | n >= 1    = Bot : N.natToFormula n
                 | otherwise = Top : if twoPower subresult then map (const Bot) (tail subresult) else subresult
                               where subresult  = map not $ N.natToFormula $ abs n Prelude.+ 1
                                     twoPower x = head x == Top && Prelude.not (null $ tail x) && all (== Bot) (tail x)
@@ -58,11 +65,10 @@ truncTo :: Int -> ArcFormula l -> ArcFormula l
 truncTo n (b, xs) = (b, truncTo' n xs)
 
 truncTo' :: Int -> [PropFormula l] -> [PropFormula l]
-truncTo' n xs | length xs <= Prelude.max 2 n = xs
-              | otherwise                    = x1 : truncTo' n xs'
+truncTo' n xs | length xs <= Prelude.max 1 n = xs
+              | otherwise                    = truncTo' n xs'
                                                where x1  = head xs
-                                                     x2  = head $ tail xs
-                                                     xs' = tail $ tail xs
+                                                     xs' = tail xs
 
 mAdd :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (ArcFormula l)
 mAdd p@(a, xs) q@(b, ys) | lengthdiff > 0 = mAdd (a, padFront' lengthdiff xs) (b, ys)
@@ -70,9 +76,9 @@ mAdd p@(a, xs) q@(b, ys) | lengthdiff > 0 = mAdd (a, padFront' lengthdiff xs) (b
                          | otherwise      = do c <- N.freshVar
                                                N.enforce [c <-> (p .>=. q)]
                                                let uress = zipWith (ite c) xs ys
-                                               vs <- mapM (const $ N.freshVar) [1..length uress]
-                                               N.enforce $ zipWith (<->) vs uress
-                                               return (a && b, vs)
+--                                               vs <- mapM (const $ N.freshVar) [1..length uress]
+--                                               N.enforce $ zipWith (<->) vs uress
+                                               return (a && b, uress)
   where lengthdiff = length ys - length xs
 
 mTimes :: (Ord l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (ArcFormula l)
@@ -114,6 +120,12 @@ mTimes (a, xs) (b, ys) | lengthdiff > 0 = mTimes (a, padFront' lengthdiff xs) (b
                     | lengthdiff < 0 = (a, xs) .=. (b, padFront' (-1 * lengthdiff) ys)
                     | otherwise      = (a <-> b) && bigAnd (zipWith (<->) xs ys)
   where lengthdiff = length ys - length xs
+
+soundInf :: (Eq l, PropAtom a) => ArcInt -> a -> PropFormula l
+soundInf n v = soundInf' (arcToBits n) v
+
+soundInf' :: (Eq l, PropAtom a) => Int -> a -> PropFormula l
+soundInf' n v = propAtom (InfBit v) --> bigAnd (map (not . propAtom . BZVec v) [1..n])
 
 -- arcAtom :: (Eq l, PropAtom a) => N.Size -> a -> ArcFormula l
 -- arcAtom size a = nBitVar (N.bits size) a

@@ -210,11 +210,13 @@ addNegatively' (p,_) Top         = addLitClause (Clause [p]) >> return TopLit
 addNegatively' (_,n) Bot         = return BotLit
 
 
-addFormula :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l ()
+addFormula :: (Show l, Eq l, Solver s l) => PropFormula l -> SatSolver s l ()
 addFormula fm =
- do p <- addPositively fm
-    addLitClause $ Clause [p]
-    return ()
+-- unsafePerformIO $ do putStrLn $ show fm
+--                     return $
+  do p <- addPositively fm
+     addLitClause $ Clause [p]
+     return ()
 
 fix :: (Eq l, Solver s l) => l -> PropFormula l -> SatSolver s l ()
 fix l fm = do n <- negateELit elit

@@ -260,6 +260,9 @@ nBitVar' i n v | i <= n    = propAtom (PLVec v n) : nBitVar' (i + 1) n v
 baseFromVec :: (Ord a, Show a, Typeable a) => PLVec a -> a
 baseFromVec (PLVec x _) = x
 
+varRestrict :: (PropAtom a, Eq l) => Int -> a -> PropFormula l
+varRestrict n v = natToFormula n .>=. nBitVar (natToBits n) v
+
 natAssignment :: (Ord a, Typeable a) => Size -> A.Assign () -> NatAssign a
 natAssignment s = Map.foldWithKey f Map.empty
   where f _        False natAss       = natAss

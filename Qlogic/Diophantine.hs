@@ -80,6 +80,7 @@ class (Solver s l, SizeSemiring b) => MSemiring s l f a b | f -> a, f -> b, f ->
   constToFormula :: b -> f
   formAtom :: Int -> a -> f
   truncFormTo :: Int -> f -> f
+  varConstraint :: b -> a -> PropFormula l
   bigPlus :: [f] -> NatMonad s l f
   bigPlus = foldM plus zero
   bigProd :: [f] -> NatMonad s l f
@@ -263,10 +264,9 @@ toFormulaGen :: (Ord l, DioVarClass a, MSemiring s l f a b)
              -> SatSolver s l (PropFormula l)
 toFormulaGen f n phi =
     do (r,st) <- runDioMonad (f n phi)
-       return $ r && varRestricts st && extraForms st
-    where varRestricts st = bigAnd (Set.map (varRestrict n) (vars st))
+       return $ r && varConstraints st && extraForms st
+    where varConstraints st = bigAnd (Set.map (varConstraint n) (vars st))
           extraForms st   = bigAnd $ formulas st
-          varRestrict n v = constToFormula n `geq` formAtom (sizeToBits n) v
 
 
 -- Optimisation c of Section 5 in the Fuhs-et-al paper
@@ -307,12 +307,12 @@ monoToNat n fm@(DioMono m (vp:vps)) = maybeComputeMono fm $
     where newmax = monoBound n fm
 
 powerToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => b -> VPower a -> DioMonad s l a b f f
-powerToNat n fm@(VPower v m) | m > SR.zero = maybeComputePower fm $
-                                             do State.modify (\s -> s{vars = Set.insert v $ vars s})
-                                                let pres = formAtom (sizeToBits n) v
-                                                qres <- powerToNat n (VPower v (pred m))
-                                                natComputation (prod pres qres) newmax
-                             where newmax        = powerBound n fm
+powerToNat n fm@(VPower v m) | m > 0 = maybeComputePower fm $
+                                       do State.modify (\s -> s{vars = Set.insert v $ vars s})
+                                          let pres = formAtom (sizeToBits n) v
+                                          qres <- powerToNat n (VPower v (pred m))
+                                          natComputation (prod pres qres) newmax
+                    where newmax        = powerBound n fm
 
 powerToNat n (VPower v m) | otherwise = return one
 

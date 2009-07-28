@@ -1,17 +1,11 @@
 module Qlogic.Arctic where
 
-import Prelude hiding ((+), max)
+import Prelude hiding ((+), max, (<), (<=))
 import qualified Prelude as Prelude
 import Qlogic.Semiring
 
 data ArcInt = MinusInf | Fin Int
-  deriving (Eq, Show)
-
-instance Ord ArcInt where
-  MinusInf `compare` MinusInf = EQ
-  MinusInf `compare` Fin _ = LT
-  Fin _ `compare` MinusInf = GT
-  Fin x `compare` Fin y = x `compare` y
+  deriving (Eq, Ord, Show)
 
 instance Semiring ArcInt where
   plus = max
@@ -28,3 +22,13 @@ max (Fin x) (Fin y) = Fin $ Prelude.max x y
 MinusInf + _ = MinusInf
 _ + MinusInf = MinusInf
 (Fin x) + (Fin y) = Fin $ x Prelude.+ y
+
+(<) :: ArcInt -> ArcInt -> Bool
+MinusInf < _     = True
+Fin _ < MinusInf = False
+Fin x < Fin y    = x Prelude.< y
+
+(<=) :: ArcInt -> ArcInt -> Bool
+MinusInf <= _     = True
+Fin _ <= MinusInf = False
+Fin x <= Fin y    = x Prelude.< y
