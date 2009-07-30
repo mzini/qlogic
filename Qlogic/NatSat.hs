@@ -142,6 +142,16 @@ freshVar = literal `liftM` liftN freshLit
 enforce :: Solver s l => [PropFormula l] -> NatMonad s l ()
 enforce f = State.modify (f ++)
 
+maybeFreshVar :: (Eq l, Solver s l) => NatMonad s l (PropFormula l) -> NatMonad s l (PropFormula l)
+maybeFreshVar mf = mf >>= f
+  where f Top      = return Top
+        f Bot      = return Bot
+        f a@(SL _) = return a
+        f a@(A _)  = return a
+        f fml      = do c <- freshVar
+                        enforce [c <-> fml]
+                        return c
+
 (.+.) :: Eq l => NatFormula l -> NatFormula l -> NatFormula l
 -- ^ performs addition of natural numbers in the representation as a list
 --   of propositional formulas
@@ -159,17 +169,16 @@ ps .+. qs | lengthdiff > 0 = padBots lengthdiff ps .+. qs
 mAdd :: (Ord l, Solver s l) => NatFormula l -> NatFormula l -> NatMonad s l (NatFormula l)
 -- MA:TODO: l ist nicht typeable, was tun?
 mAdd [] []                  = return []
-mAdd [p] [q]                = do c <- freshVar
-                                 enforce [(p && q) <-> c]
-                                 return [c, not (p <-> q)]
+mAdd [p] [q]                = do c1 <- maybeFreshVar $ return $ p && q
+                                 c2 <- maybeFreshVar $ return $ not (p <-> q)
+                                 return [c1, c2]
 mAdd ps qs | lengthdiff > 0 = mAdd (padBots lengthdiff ps) qs
-           | lengthdiff < 0 = mAdd ps $ padBots (-1 * lengthdiff) qs
+           | lengthdiff < 0 = mAdd qs ps
            | otherwise      = do rs <- mAdd (tail ps) (tail qs)
                                  -- let rs = map (patom . PLVec (ps, qs)) [1..length rs']
                                  let r = head rs
-                                 c1 <- freshVar
-                                 c2 <- freshVar
-                                 enforce [twoOrThree p q r <-> c1, oneOrThree p q r <-> c2]
+                                 c1 <- maybeFreshVar $ return $ twoOrThree p q r
+                                 c2 <- maybeFreshVar $ return $ oneOrThree p q r
                                  return $ c1 : c2 : tail rs
   where lengthdiff = length qs - length ps
         p          = head ps
@@ -197,8 +206,7 @@ mTimes [p] qs    = do return $ map (p &&) qs
 mTimes ps (q:qs) = do let r1 = map (&& q) ps ++ padBots (length qs) []
                       r2 <- mTimes ps qs
                       addres <- mAdd r1 r2
-                      vs <- mapM (const $ freshVar) [1..length addres]
-                      enforce $ zipWith (<->) vs addres
+                      vs <- mapM (maybeFreshVar . return) addres
                       return vs
 
 bigTimes :: Eq l => [NatFormula l] -> NatFormula l
@@ -212,8 +220,8 @@ bigTimes = foldr (.*.) [Top]
 [] .>. []                  = Bot
 [p] .>. [q]                = p && not q
 ps .>. qs | lengthdiff > 0 = padBots lengthdiff ps .>. qs
-          | lengthdiff < 0 = ps .>. padBots (-1 * lengthdiff) qs
-          | otherwise      = (p && not q) || ((p <-> q) && (tail ps .>. tail qs))
+          | lengthdiff < 0 = ps .>. padBots (abs lengthdiff) qs
+          | otherwise      = (p && not q) || ((q --> p) && (tail ps .>. tail qs))
    where lengthdiff        = length qs - length ps
          p                 = head ps
          q                 = head qs
@@ -224,8 +232,8 @@ ps .>. qs | lengthdiff > 0 = padBots lengthdiff ps .>. qs
 [] .>=. []                  = Top
 [p] .>=. [q]                = p || not q
 ps .>=. qs | lengthdiff > 0 = padBots lengthdiff ps .>=. qs
-           | lengthdiff < 0 = ps .>=. padBots (-1 * lengthdiff) qs
-           | otherwise      = (p && not q) || ((p <-> q) && (tail ps .>=. tail qs))
+           | lengthdiff < 0 = ps .>=. padBots (abs lengthdiff) qs
+           | otherwise      = (p && not q) || ((q --> p) && (tail ps .>=. tail qs))
     where lengthdiff        = length qs - length ps
           p                 = head ps
           q                 = head qs
@@ -236,8 +244,45 @@ ps .>=. qs | lengthdiff > 0 = padBots lengthdiff ps .>=. qs
 [] .=. []                  = Top
 [p] .=. [q]                = p <-> q
 ps .=. qs | lengthdiff > 0 = padBots lengthdiff ps .=. qs
-          | lengthdiff < 0 = ps .=. padBots (-1 * lengthdiff) qs
+          | lengthdiff < 0 = ps .=. padBots (abs lengthdiff) qs
           | otherwise      = (head ps <-> head qs) && (tail ps .=. tail qs)
+   where lengthdiff        = length qs - length ps
+
+mGrt :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (PropFormula l)
+-- ^ performs "greater than" comparisons of natural numbers in the representation
+--   as a list of propositional formulas
+[] `mGrt` []                  = return Bot
+[p] `mGrt` [q]                = return $ p && not q
+ps `mGrt` qs | lengthdiff > 0 = padBots lengthdiff ps `mGrt` qs
+             | lengthdiff < 0 = ps `mGrt` padBots (abs lengthdiff) qs
+             | otherwise      = do subresult <- tail ps `mGrt` tail qs
+                                   return $ (p && not q) || ((q --> p) && subresult)
+   where lengthdiff        = length qs - length ps
+         p                 = head ps
+         q                 = head qs
+
+mGeq :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (PropFormula l)
+-- ^ performs "greater or equal" comparisons of natural numbers in the representation
+--   as a list of propositional formulas
+[] `mGeq` []                  = return $ Top
+[p] `mGeq` [q]                = return $ p || not q
+ps `mGeq` qs | lengthdiff > 0 = padBots lengthdiff ps `mGeq` qs
+             | lengthdiff < 0 = ps `mGeq` padBots (abs lengthdiff) qs
+             | otherwise      = do subresult <- tail ps `mGeq` tail qs
+                                   return $ (p && not q) || ((q --> p) && subresult)
+    where lengthdiff        = length qs - length ps
+          p                 = head ps
+          q                 = head qs
+
+mEqu :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (PropFormula l)
+-- ^ performs equality comparisons of natural numbers in the representation
+--   as a list of propositional formulas
+[] `mEqu` []                  = return Top
+[p] `mEqu` [q]                = return $ p <-> q
+ps `mEqu` qs | lengthdiff > 0 = padBots lengthdiff ps `mEqu` qs
+             | lengthdiff < 0 = ps `mEqu` padBots (abs lengthdiff) qs
+             | otherwise      = do subresult <- tail ps `mEqu` tail qs
+                                   return $ (head ps <-> head qs) && subresult
    where lengthdiff        = length qs - length ps
 
 -- creates a variable with enough bits to represent n
@@ -246,6 +291,11 @@ natAtom :: (PropAtom a, Eq l) => Size -> a -> NatFormula l
 --   propositional variables. The length of the list is chosen
 --   to be exactly enough in order to represent n
 natAtom size a = nBitVar (bits size) a
+
+natAtomM :: (PropAtom a, Eq l, Solver s l) => Size -> a -> NatMonad s l (NatFormula l)
+natAtomM size a = do varRestrict <- natToFormula (bound size) `mGeq` nBitVar (bits size) a
+                     enforce [varRestrict]
+                     return $ nBitVar (bits size) a
 
 nBitVar :: (PropAtom a, Eq l) => Int -> a -> NatFormula l
 nBitVar n v = nBitVar' 1 n v
@@ -260,13 +310,13 @@ nBitVar' i n v | i <= n    = propAtom (PLVec v n) : nBitVar' (i + 1) n v
 baseFromVec :: (Ord a, Show a, Typeable a) => PLVec a -> a
 baseFromVec (PLVec x _) = x
 
-varRestrict :: (PropAtom a, Eq l) => Int -> a -> PropFormula l
-varRestrict n v = natToFormula n .>=. nBitVar (natToBits n) v
+-- varRestrict :: (PropAtom a, Eq l) => Int -> a -> PropFormula l
+-- varRestrict n v = natToFormula n .>=. nBitVar (natToBits n) v
 
 natAssignment :: (Ord a, Typeable a) => Size -> A.Assign () -> NatAssign a
 natAssignment s = Map.foldWithKey f Map.empty
   where f _        False natAss       = natAss
-        f (Right (PA k)) True  natAss = 
+        f (Right (PA k)) True  natAss =
             case cast k of 
               Just (PLVec var i) -> Map.alter (modifyBit i) var natAss
               Nothing            -> natAss
