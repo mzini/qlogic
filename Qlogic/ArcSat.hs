@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-
 module Qlogic.ArcSat where
 
 import Prelude hiding ((+), max, not, (&&), (||))
