@@ -130,11 +130,12 @@ size (Neg a)     = size a + 1
 size Top         = 1
 size Bot         = 1
 
-pprintBinFm :: Show a => String -> Formula l a -> Formula l a -> Doc
+pprintBinFm :: (Show a, Show l) => String -> Formula l a -> Formula l a -> Doc
 pprintBinFm s a b = parens $ text s <+> (pprintFormula a $$ pprintFormula b)
 
-pprintFormula :: Show a => Formula l a -> Doc
+pprintFormula :: (Show a, Show l) => Formula l a -> Doc
 pprintFormula (A a)       = text $ show a
+pprintFormula (SL a)      = text $ show a
 pprintFormula (And l)     = parens $ text "/\\" <+> sep (punctuate (text " ") $ map pprintFormula l)
 pprintFormula (Or l)      = parens $ text "\\/" <+> sep (punctuate (text " ") $ map pprintFormula l)
 pprintFormula (Iff a b)   = pprintBinFm "<->" a b

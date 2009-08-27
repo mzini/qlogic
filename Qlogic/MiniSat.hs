@@ -11,7 +11,9 @@ type MiniSatSolver = Sat.S
 
 instance MonadIO MiniSatSolver where 
     liftIO = Sat.lift
+
 type MiniSatLiteral = Sat.Lit
+
 instance Solver MiniSatSolver MiniSatLiteral where
     solve         = Sat.solve []
     run           = Sat.run

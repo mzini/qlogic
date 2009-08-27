@@ -28,7 +28,7 @@ where
 import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Monad
-import Control.Monad.Trans (lift, liftIO)
+import Control.Monad.Trans (lift, liftIO, MonadIO)
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Map as Map
 import qualified Qlogic.Assign as Assign
@@ -58,7 +58,7 @@ data ExtLit l = Lit !l | TopLit | BotLit deriving (Eq, Show)
 data Polarity = PosPol | NegPol
 
 newtype SatSolver s l r = SatSolver (State.StateT (Map.Map PA l) s r)
-    deriving (Monad, StateClass.MonadState (Map.Map PA l))
+    deriving (Monad, StateClass.MonadState (Map.Map PA l), MonadIO)
 
 liftS :: Solver s l => s r -> SatSolver s l r 
 liftS = SatSolver . lift
