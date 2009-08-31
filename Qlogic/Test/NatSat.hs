@@ -22,28 +22,28 @@ instance Arbitrary (PropFormula MiniSatLiteral) where
 prop_mAddCorrect :: NatFormula MiniSatLiteral -> NatFormula MiniSatLiteral -> Bool
 prop_mAddCorrect ps qs = litsToNat ps + litsToNat qs == eval f a
                          where (f, a) = unsafePerformIO $ runSolver $
-                                          do (f, fs) <- runNatMonad $ mAdd ps qs
-                                             addFormula $ bigAnd fs
-                                             liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
-                                             ass <- getAssign
+                                          do (f, fs) <- runNatMonad $ mAdd ps qs :: SatSolver MiniSatSolver MiniSatLiteral (NatFormula MiniSatLiteral, [PropFormula MiniSatLiteral])
+                                             -- addFormula $ bigAnd fs
+                                             -- liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
+                                             let ass = A.empty
                                              return (f, ass)
 
 prop_mTimesCorrect :: NatFormula MiniSatLiteral -> NatFormula MiniSatLiteral -> Bool
 prop_mTimesCorrect ps qs = litsToNat ps * litsToNat qs == eval f a
                            where (f, a) = unsafePerformIO $ runSolver $
-                                            do (f, fs) <- runNatMonad $ mTimes ps qs
-                                               addFormula $ bigAnd fs
-                                               liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
-                                               ass <- getAssign
+                                            do (f, fs) <- runNatMonad $ mTimes ps qs :: SatSolver MiniSatSolver MiniSatLiteral (NatFormula MiniSatLiteral, [PropFormula MiniSatLiteral])
+                                               -- addFormula $ bigAnd fs
+                                               -- liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
+                                               let ass = A.empty
                                                return (f, ass)
 
 prop_mGrtCorrect :: NatFormula MiniSatLiteral -> NatFormula MiniSatLiteral -> Bool
 prop_mGrtCorrect ps qs = (litsToNat ps' > litsToNat qs') == A.eval f a
                          where (f, a) = unsafePerformIO $ runSolver $
-                                          do (f, fs) <- runNatMonad $ mGrt ps' qs'
-                                             addFormula $ bigAnd fs
-                                             liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
-                                             ass <- getAssign
+                                          do (f, fs) <- runNatMonad $ mGrt ps' qs' :: SatSolver MiniSatSolver MiniSatLiteral (PropFormula MiniSatLiteral, [PropFormula MiniSatLiteral])
+                                             -- addFormula $ bigAnd fs
+                                             -- liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
+                                             let ass = A.empty
                                              return (f, ass)
                                ps'    = truncTo 31 ps
                                qs'    = truncTo 31 qs
@@ -51,10 +51,10 @@ prop_mGrtCorrect ps qs = (litsToNat ps' > litsToNat qs') == A.eval f a
 prop_mGeqCorrect :: NatFormula MiniSatLiteral -> NatFormula MiniSatLiteral -> Bool
 prop_mGeqCorrect ps qs = (litsToNat ps' >= litsToNat qs') == A.eval f a
                          where (f, a) = unsafePerformIO $ runSolver $
-                                          do (f, fs) <- runNatMonad $ mGeq ps' qs'
-                                             addFormula $ bigAnd fs
-                                             liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
-                                             ass <- getAssign
+                                          do (f, fs) <- runNatMonad $ mGeq ps' qs' :: SatSolver MiniSatSolver MiniSatLiteral (PropFormula MiniSatLiteral, [PropFormula MiniSatLiteral])
+                                             -- addFormula $ bigAnd fs
+                                             -- liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
+                                             let ass = A.empty
                                              return (f, ass)
                                ps'    = truncTo 31 ps
                                qs'    = truncTo 31 qs
@@ -62,13 +62,30 @@ prop_mGeqCorrect ps qs = (litsToNat ps' >= litsToNat qs') == A.eval f a
 prop_mEquCorrect :: NatFormula MiniSatLiteral -> NatFormula MiniSatLiteral -> Bool
 prop_mEquCorrect ps qs = (litsToNat ps' == litsToNat qs') == A.eval f a
                          where (f, a) = unsafePerformIO $ runSolver $
-                                          do (f, fs) <- runNatMonad $ mEqu ps' qs'
-                                             addFormula $ bigAnd fs
-                                             liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
-                                             ass <- getAssign
+                                          do (f, fs) <- runNatMonad $ mEqu ps' qs' :: SatSolver MiniSatSolver MiniSatLiteral (PropFormula MiniSatLiteral, [PropFormula MiniSatLiteral])
+                                             -- addFormula $ bigAnd fs
+                                             -- liftS solve :: SatSolver MiniSatSolver MiniSatLiteral Bool
+                                             let ass = A.empty
                                              return (f, ass)
                                ps'    = truncTo 31 ps
                                qs'    = truncTo 31 qs
+
+prop_mGeqEqu :: NatFormula MiniSatLiteral -> NatFormula MiniSatLiteral -> Bool
+prop_mGeqEqu ps qs = A.eval f a == (A.eval f' a' && A.eval f'' a'')
+                     where (f, a)     = unsafePerformIO $ runSolver $
+                                          do (f, fs) <- runNatMonad $ mEqu ps' qs' :: SatSolver MiniSatSolver MiniSatLiteral (PropFormula MiniSatLiteral, [PropFormula MiniSatLiteral])
+                                             let ass = A.empty
+                                             return (f, ass)
+                           (f', a')   = unsafePerformIO $ runSolver $
+                                          do (f, fs) <- runNatMonad $ mGeq ps' qs' :: SatSolver MiniSatSolver MiniSatLiteral (PropFormula MiniSatLiteral, [PropFormula MiniSatLiteral])
+                                             let ass = A.empty
+                                             return (f, ass)
+                           (f'', a'') = unsafePerformIO $ runSolver $
+                                          do (f, fs) <- runNatMonad $ mGeq qs' ps' :: SatSolver MiniSatSolver MiniSatLiteral (PropFormula MiniSatLiteral, [PropFormula MiniSatLiteral])
+                                             let ass = A.empty
+                                             return (f, ass)
+                           ps'      = truncTo 31 ps
+                           qs'      = truncTo 31 qs
 
 litsToNat :: NatFormula l -> Int
 litsToNat = List.foldl' f 0
@@ -90,6 +107,7 @@ main = do
         , run prop_mGrtCorrect
         , run prop_mGeqCorrect
         , run prop_mEquCorrect
+        , run prop_mGeqEqu
         ]
 
 -- main = do putStrLn $ show $ fst $ unsafePerformIO $ runSolver (runNatMonad $ mAdd [Top] [Top] :: SatSolver MiniSatSolver MiniSatLiteral (NatFormula MiniSatLiteral, [PropFormula MiniSatLiteral]))

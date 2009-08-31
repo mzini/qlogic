@@ -304,7 +304,7 @@ nBitVar n v = nBitVar' 1 n v
 --                                                   return $ 
 
 nBitVar' :: (PropAtom a, Eq l) => Int -> Int -> a -> NatFormula l
-nBitVar' i n v | i <= n    = propAtom (PLVec v n) : nBitVar' (i + 1) n v
+nBitVar' i n v | i <= n    = propAtom (PLVec v i) : nBitVar' (i + 1) n v
                | otherwise = []
 
 baseFromVec :: (Ord a, Show a, Typeable a) => PLVec a -> a

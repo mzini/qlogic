@@ -292,6 +292,7 @@ natComputation_ m b =
 
 polyToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => b -> DioPoly a b -> DioMonad s l a b f f
 polyToNat n []        = return zero
+polyToNat n [x]       = monoToNat n x
 polyToNat n fm@(x:xs) = maybeComputePoly fm $
                         do pres <- monoToNat n x
                            qres <- polyToNat n xs
@@ -329,7 +330,7 @@ constToPoly :: b -> DioPoly a b
 constToPoly n = [DioMono n []]
 
 varToPoly :: SR.Semiring b => a -> DioPoly a b
-varToPoly v = [DioMono SR.one [VPower v SR.one]]
+varToPoly v = [DioMono SR.one [VPower v 1]]
 
 add :: (Eq a, Eq b, SR.Semiring b) => DioPoly a b -> DioPoly a b -> DioPoly a b
 add p = shallowSimp . (++) p
