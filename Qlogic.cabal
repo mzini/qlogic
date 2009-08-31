@@ -15,6 +15,7 @@ library
                     Qlogic.ArcSat
                     Qlogic.Semiring
                     Qlogic.Formula
+                    Qlogic.Formula.NoLaw
                     Qlogic.Assign
                     Qlogic.SatSolver
                     Qlogic.MiniSat
