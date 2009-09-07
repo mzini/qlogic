@@ -7,7 +7,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Qlogic.SatSolver 
+module Qlogic.SatSolver
     (
      SatSolver(..)
     , Solver(..)

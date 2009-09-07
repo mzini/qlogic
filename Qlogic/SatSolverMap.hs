@@ -1,247 +1,234 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Qlogic.SatSolver where
+module Qlogic.SatSolver
+    (
+     SatSolver(..)
+    , Solver(..)
+    , Clause(..)
+    , Decoder(..)
+    , (:&:) (..)
+    , addFormula
+    , fix
+    , value
+    , freshLit
+    , getAssign
+    , runSolver
+    , liftS
+    , liftIO
+    )
+where
+
+import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Monad
-import Control.Monad.Trans (lift, MonadIO)
+import Control.Monad.Trans (lift, liftIO, MonadIO)
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Map as Map
+import qualified Qlogic.Assign as Assign
+import Qlogic.Assign (Assign, (|->))
 import Data.Typeable
+import qualified Control.Monad.State.Class as StateClass
 import Prelude hiding (negate)
 
 import Qlogic.Formula
-import qualified Sat as Sat
+import Qlogic.PropositionalFormula
 
 newtype Clause l = Clause {clauseToList :: [l]}
 
-class SatMonad s where
+class Monad s => Solver s l | s -> l where
     solve         :: s Bool
     run           :: s a -> IO a
-
-class SatMonad s => Solver s l where
     newLit        :: s l
     negate        :: l -> s l
     addClause     :: Clause l -> s Bool
     getModelValue :: l -> s Bool
 
-instance MonadIO Sat.S where
-  liftIO = Sat.lift
-
-instance SatMonad Sat.S where
-    solve         = Sat.solve []
-    run           = Sat.run
-
-instance Solver Sat.S Sat.Lit where
-    newLit        = Sat.newLit
-    negate        = return . Sat.neg
-    addClause     = Sat.addClause . clauseToList
-    getModelValue = Sat.getModelValue
-
 class Solver s l => IncrementalSolver s l where
     okay :: s () -> s Bool
 
-data Form = Form PropositionalFormula deriving (Eq, Ord, Show, Typeable)
-instance PropositionalAtomClass Form
-
-data ExtLit l = Lit l | TopLit | BotLit deriving Eq
+data ExtLit l = Lit !l | TopLit | BotLit deriving (Eq, Show)
 
 data Polarity = PosPol | NegPol
 
-data StateElt l = StateElt { inPos :: Bool, inNeg :: Bool, lit :: ExtLit l }
-type SolverState l = Map.Map PropositionalAtom (StateElt l)
-type SatSolver s l r = State.StateT (SolverState l) s r
+newtype SatSolver s l r = SatSolver (State.StateT (Map.Map PA l) s r)
+    deriving (Monad, StateClass.MonadState (Map.Map PA l), MonadIO)
 
-type MiniSat r = SatSolver Sat.S Sat.Lit r
+liftS :: Solver s l => s r -> SatSolver s l r 
+liftS = SatSolver . lift
 
-lvar :: PropositionalFormula -> PropositionalAtom
-lvar (A x) = x
-lvar fm    = PropositionalAtom $ Form fm
+freshLit :: Solver s l => SatSolver s l l
+freshLit = liftS newLit
 
-shiftPolarity :: Polarity -> Polarity
-shiftPolarity PosPol = NegPol
-shiftpolarity NegPol = PosPol
+freshELit :: Solver s l => SatSolver s l (ExtLit l)
+freshELit = Lit `liftM` freshLit
 
-inPol :: Polarity -> StateElt l -> Bool
-inPol PosPol = inPos
-inPol NegPol = inNeg
+atomToELit :: Solver s l => PA -> SatSolver s l (ExtLit l)
+atomToELit a = do litMap <- State.get
+                  case Map.lookup a litMap of
+                    Just oldLit -> return $ Lit oldLit
+                    Nothing     -> do l <- freshLit
+                                      State.put $ Map.insert a l litMap
+                                      return (Lit l)
 
-alit :: (Monad s, Solver s l) => PropositionalAtom -> SatSolver s l (ExtLit l)
-alit a = do s <- State.get
-            case {-# SCC "mapLookup" #-} Map.lookup a s of
-              Nothing  -> do theLit <- lift newLit
-                             State.modify $ {-# SCC "mapInsert" #-} Map.insert a (StateElt {inPos = False, inNeg = False, lit = Lit theLit})
-                             return $ Lit theLit
-              Just elt -> return $ lit elt
---                 case Map.lookup a s of
---                   Nothing  -> do theLit <- lift newLit
---                                  State.modify $ addAtom pol a (Lit theLit)
---                                  return $ Lit theLit
---                   Just elt -> if inPol pol elt
---                               then return $ lit elt
---                               else do State.modify $ Map.adjust (setPol pol) a
---                                       return $ lit elt
---              where addAtom PosPol a l = Map.insert a (StateElt {inPos = True, inNeg = False, lit = l})
---                    addAtom NegPol a l = Map.insert a (StateElt {inPos = False, inNeg = True, lit = l})
---                    setPol PosPol elt = elt{inPos=True}
---                    setPol NegPol elt = elt{inNeg=True}
+negateELit :: (Solver s l) => ExtLit l -> SatSolver s l (ExtLit l)
+negateELit (Lit x) = Lit `liftM` liftS  (negate x)
+negateELit TopLit  = return BotLit
+negateELit BotLit  = return TopLit
 
-plit :: (Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
-plit (A x)   = alit x
+plit :: (Monad s, Solver s l) => PropFormula l -> SatSolver s l (ExtLit l)
+plit (A x)   = atomToELit x
+plit (SL x)  = return $ Lit x
 plit Top     = return TopLit
 plit Bot     = return BotLit
 plit (Neg x) = nlit x
-plit fm      = alit $ lvar fm
+plit fm      = freshELit
 
-nlit :: (Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
-nlit fm = plit fm >>= negateLit
+nlit :: (Monad s, Solver s l) => PropFormula l -> SatSolver s l (ExtLit l)
+nlit fm = plit fm >>= negateELit
 
-negateLit :: (Monad s, Solver s l) => ExtLit l -> SatSolver s l (ExtLit l)
-negateLit (Lit x) = liftM Lit $ lift $ negate x
-negateLit TopLit  = return BotLit
-negateLit BotLit  = return TopLit
+freshELits :: (Monad s, Solver s l) => SatSolver s l (ExtLit l, ExtLit l)
+freshELits = do p <- freshELit
+                n <- negateELit p
+                return (p,n)
 
-addLitClause :: (Eq l, Monad s, Solver s l) => Clause (ExtLit l) -> SatSolver s l Bool
-addLitClause (Clause ls) | elem TopLit ls = return True
-                         | otherwise      = {-# SCC "addLitClause" #-} lift $ addClause $ Clause $ foldr f [] ls
-                         where f (Lit x) xs = x:xs
-                               f BotLit xs  = xs
-                               f TopLit xs  = error "TopLit in SatSolver.addLitClause"
+addLitClause :: (Eq l, Solver s l) => Clause (ExtLit l) -> SatSolver s l Bool
+addLitClause (Clause ls) = case foldr f (Just []) ls of
+                             Nothing -> return True
+                             Just lits -> liftS $ addClause $ Clause lits
+    where f (Lit x) (Just xs) = Just $ x:xs
+          f BotLit  xs        = xs
+          f TopLit  xs        = Nothing
+          f _       Nothing   = Nothing
 
-maybeCompute_  :: (Monad s, Solver s l)
-               => Polarity
-               -> PropositionalFormula
-               -> (ExtLit l -> SatSolver s l (ExtLit l))
-               -> SatSolver s l (ExtLit l)
-maybeCompute_ pol fm m =
-  do theLit <- lift newLit
-     m $ Lit theLit
---      s <- State.get
---      let a = lvar fm
---      case {-# SCC "mapLookup" #-} Map.lookup a s of
--- -- TODO: AS: merge lookup+adjust
---        Nothing  -> do theLit <- lift newLit
---                       State.modify $ addAtom pol a (Lit theLit)
---                       m $ Lit theLit
---        Just elt -> if inPol pol elt
---                    then return $ lit elt
---                    else do State.modify $ {-# SCC "mapAdjust" #-} Map.adjust (setPol pol) a
---                            m $ lit elt
-  where addAtom PosPol a l = {-# SCC "mapInsert" #-} Map.insert a (StateElt {inPos = True, inNeg = False, lit = l})
-        addAtom NegPol a l = {-# SCC "mapInsert" #-} Map.insert a (StateElt {inPos = False, inNeg = True, lit = l})
-        setPol PosPol elt = elt{inPos=True}
-        setPol NegPol elt = elt{inNeg=True}
+addPositively :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l (ExtLit l)
+addPositively fm@(Neg a) = addNegatively a >>= negateELit
+addPositively fm@(A _)   = plit fm
+addPositively fm@(SL l)  = plit fm
+addPositively Top        = return TopLit
+addPositively Bot        = return BotLit
+addPositively fm         = do (p,n) <- freshELits 
+                              addPositively' (p,n) fm
 
-maybeComputePos, maybeComputeNeg :: (Monad s, Solver s l)
-                                 => PropositionalFormula
-                                 -> (ExtLit l -> SatSolver s l (ExtLit l))
-                                 -> SatSolver s l (ExtLit l)
-maybeComputePos = maybeCompute_ PosPol
-maybeComputeNeg = maybeCompute_ NegPol
-
-addPositively :: (Eq l, Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
-addPositively fm@(And as) = {-# SCC "addPosAnd" #-}
-  maybeComputePos fm $ \pfm ->
-  do nfm <- negateLit pfm
-     lits <- mapM addPositively as
-     mapM_ (\l -> addLitClause (Clause [nfm, l])) lits
-     return pfm
-addPositively fm@(Or as) = {-# SCC "addPosOr" #-}
-  maybeComputePos fm $ \pfm ->
-  do nfm <- negateLit pfm
-     lits <- mapM addPositively as
-     addLitClause (Clause (nfm:lits))
-     return pfm
-addPositively fm@(a `Iff` b) = {-# SCC "addPosIff" #-}
-  maybeComputePos fm $ \pfm ->
-  do nfm <- negateLit pfm
-     apos <- addPositively a
-     addNegatively a
-     aneg <- negateLit apos
+addPositively' :: (Eq l, Solver s l) => (ExtLit l,ExtLit l) -> PropFormula l -> SatSolver s l (ExtLit l)
+addPositively' (p,n) fm@(And as) =
+  do plits <- mapM addPositively as
+     mapM_ (\l -> addLitClause $ Clause [n, l]) plits
+     return p
+addPositively' (p,n) fm@(Or as) =
+  do plits <- mapM addPositively as
+     addLitClause $ Clause $ n:plits
+     return p
+addPositively' (p,n) fm@(a `Iff` b) =
+  do apos <- addPositively a
+     aneg <- addNegatively a >>= negateELit
      bpos <- addPositively b
-     addNegatively b
-     bneg <- negateLit bpos
-     addLitClause $ Clause [nfm, aneg, bpos]
-     addLitClause $ Clause [nfm, apos, bneg]
-     return pfm
-addPositively fm@(Ite g t e) = {-# SCC "addPosIte" #-}
-  maybeComputePos fm $ \pfm ->
-  do nfm <- negateLit pfm
-     gpos <- addPositively g
-     addNegatively g
-     gneg <- negateLit gpos
+     bneg <- addNegatively b >>= negateELit
+     addLitClause $ Clause [n, aneg, bpos]
+     addLitClause $ Clause [n, apos, bneg]
+     return p
+addPositively' (p,n) fm@(Ite g t e) =
+  do gpos <- addPositively g
+     gneg <- addNegatively g >>= negateELit
      tpos <- addPositively t
      epos <- addPositively e
-     addLitClause $ Clause [nfm, gneg, tpos]
-     addLitClause $ Clause [nfm, gpos, epos]
-     return pfm
-addPositively fm@(a `Imp` b) = {-# SCC "addPosImp" #-}
-  maybeComputePos fm $ \pfm ->
-  do nfm <- negateLit pfm
-     aneg <- addNegatively a >>= negateLit
+     addLitClause $ Clause [n, gneg, tpos]
+     addLitClause $ Clause [n, gpos, epos]
+     return p
+addPositively' (p,n) fm@(a `Imp` b) =
+  do aneg <- addNegatively a >>= negateELit
      bpos <- addPositively b
-     addLitClause $ Clause [nfm, aneg, bpos]
-     return pfm
-addPositively fm@(Neg a) = {-# SCC "addPosNeg" #-} addNegatively a >>= negateLit
-addPositively fm@(A _) = {-# SCC "addPosAtom" #-} plit fm
-addPositively Top = {-# SCC "addPosTop" #-} return TopLit
-addPositively Bot = {-# SCC "addPosBot" #-} return BotLit
+     addLitClause $ Clause [n, aneg, bpos]
+     return p
+addPositively' (p,n) fm@(Neg a) = do addNegatively' (n,p) a
+                                     return p
+addPositively' (p,n) fm@(A _)   = do l <- plit fm
+                                     addLitClause $ Clause [n, l]
+                                     return l
+addPositively' (_,n) fm@(SL l)  = do l <- plit fm
+                                     addLitClause $ Clause [n, l]
+                                     return l
+addPositively' (_,_) Top        = return TopLit
+addPositively' (_,n) Bot        = addLitClause (Clause [n]) >> return BotLit
 
-addNegatively :: (Eq l, Monad s, Solver s l) => PropositionalFormula -> SatSolver s l (ExtLit l)
-addNegatively fm@(And as) = {-# SCC "addNegAnd" #-}
-  maybeComputeNeg fm $ \pfm ->
-  do nlits <- mapM (\l -> addNegatively l >>= negateLit) as
-     addLitClause (Clause (pfm:nlits))
-     return pfm
-addNegatively fm@(Or as) = {-# SCC "addNegOr" #-}
-  maybeComputeNeg fm $ \pfm ->
-  do nlits <- mapM (\l -> addNegatively l >>= negateLit) as
-     mapM_ (\l -> addLitClause (Clause [pfm, l])) nlits
-     return pfm
-addNegatively fm@(a `Iff` b) = {-# SCC "addNegIff" #-}
-  maybeComputeNeg fm $ \pfm ->
+
+addNegatively :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l (ExtLit l)
+addNegatively fm@(Neg a) = addPositively a >>= negateELit
+addNegatively fm@(A _)   = plit fm
+addNegatively fm@(SL l)  = plit fm
+addNegatively Top        = return TopLit
+addNegatively Bot        = return BotLit
+addNegatively fm         = do (p,n) <- freshELits
+                              addNegatively' (p,n) fm
+
+addNegatively' :: (Eq l, Solver s l) => (ExtLit l, ExtLit l) -> PropFormula l -> SatSolver s l (ExtLit l)
+addNegatively' (p,n) fm@(And as) =
+  do nlits <- mapM (\l -> addNegatively l >>= negateELit) as
+     addLitClause $ Clause $ p:nlits
+     return p
+addNegatively' (p,n) fm@(Or as) = 
+  do nlits <- mapM (\l -> addNegatively l >>= negateELit) as
+     mapM_ (\l -> addLitClause $ Clause [p, l]) nlits
+     return p
+addNegatively' (p,n) fm@(a `Iff` b) =
   do apos <- addPositively a
-     addNegatively a
-     aneg <- negateLit apos
+     aneg <- addNegatively a >>= negateELit
      bpos <- addPositively b
-     addNegatively b
-     bneg <- negateLit bpos
-     addLitClause $ Clause [pfm, apos, bpos]
-     addLitClause $ Clause [pfm, aneg, bneg]
-     return pfm
-addNegatively fm@(Ite g t e) = {-# SCC "addNegIte" #-}
-  maybeComputeNeg fm $ \pfm ->
+     bneg <- addNegatively b >>= negateELit
+     addLitClause $ Clause [p, apos, bpos]
+     addLitClause $ Clause [p, aneg, bneg]
+     return p
+addNegatively' (p,n) fm@(Ite g t e) =
   do gpos <- addPositively g
-     addNegatively g
-     gneg <- negateLit gpos
-     tneg <- addNegatively t >>= negateLit
-     eneg <- addNegatively e >>= negateLit
-     addLitClause $ Clause [pfm, gneg, tneg]
-     addLitClause $ Clause [pfm, gpos, eneg]
-     return pfm
-addNegatively fm@(a `Imp` b) = {-# SCC "addNegImp" #-}
-  maybeComputeNeg fm $ \pfm ->
+     gneg <- addNegatively g >>= negateELit
+     tneg <- addNegatively t >>= negateELit
+     eneg <- addNegatively e >>= negateELit
+     addLitClause $ Clause [p, gneg, tneg]
+     addLitClause $ Clause [p, gpos, eneg]
+     return p
+addNegatively' (p,n) fm@(a `Imp` b) =
   do apos <- addPositively a
-     bneg <- addNegatively b >>= negateLit
-     addLitClause $ Clause [pfm, apos]
-     addLitClause $ Clause [pfm, bneg]
-     return pfm
-addNegatively fm@(Neg a) = {-# SCC "addNegNeg" #-} addPositively a >>= negateLit
-addNegatively fm@(A _) = {-# SCC "addNegAtom" #-} plit fm
-addNegatively Top = {-# SCC "addNegTop" #-} return TopLit
-addNegatively Bot = {-# SCC "addNegBot" #-} return BotLit
+     bneg <- addNegatively b >>= negateELit
+     addLitClause $ Clause [p, apos]
+     addLitClause $ Clause [p, bneg]
+     return p
+addNegatively' (p,n) fm@(Neg a)  = do addPositively' (n,p) a
+                                      return p
+addNegatively' (p,n) fm@(A _)    = do l' <- plit fm >>= negateELit
+                                      addLitClause $ Clause [l',p]
+                                      return n
+addNegatively' (p,n) fm@(SL l)   = do l' <- plit fm >>= negateELit
+                                      addLitClause $ Clause [l',p]
+                                      return n
+addNegatively' (p,_) Top         = addLitClause (Clause [p]) >> return TopLit
+addNegatively' (_,n) Bot         = return BotLit
 
-addFormula :: (Eq l, Monad s, Solver s l) => PropositionalFormula -> SatSolver s l ()
-addFormula fm = {-# SCC "addFormula" #-}
- do pfm <- addPositively fm
-    addLitClause $ Clause [pfm]
-    return ()
+
+addFormula :: (Show l, Eq l, Solver s l) => PropFormula l -> SatSolver s l ()
+addFormula fm =
+-- unsafePerformIO $ do putStrLn $ show fm
+--                     return $
+  do p <- addPositively fm
+     addLitClause $ Clause [p]
+     return ()
+
+fix :: (Eq l, Solver s l) => l -> PropFormula l -> SatSolver s l ()
+fix l fm = do n <- negateELit elit
+              addPositively' (elit,n) fm
+              addNegatively' (elit,n) fm
+              return ()
+--              unsafePerformIO ((putStrLn $ show l ++ " := " ++ show fm) >> (return $ return ()))
+    where elit = Lit l
 
 class Typeable a => Decoder e a | e -> a, a -> e where
-  extract :: PropositionalAtom -> Maybe a
-  extract (PropositionalAtom a) = {-# SCC "decoderExtract" #-} cast a
+  extract :: PA -> Maybe a
+  extract (PA a) = cast a
   add :: a -> e -> e
 
 data a :&: b = a :&: b
@@ -256,21 +243,26 @@ instance (Decoder e1 a1, Decoder e2 a2) => Decoder (e1 :&: e2) (OneOf a1 a2) whe
   add (Foo a) (e1 :&: e2) = add a e1 :&: e2
   add (Bar b) (e1 :&: e2) = e1 :&: (add b e2)
 
-constructValue :: (Decoder e a, Monad s, Solver s l) => e -> SatSolver s l e
-constructValue e = {-# SCC "constructValue" #-} State.get >>= Map.foldWithKey f (return $ e)
-  where f a v m = {-# SCC "constructValueF" #-}
-                  case extract a of
-                    Just a' -> case lit v of
-                                 Lit v' -> lift (getModelValue v') >>= \ val -> if val then add a' `liftM` m else m
-                                 _ -> m
-                    Nothing -> m
+constructValue :: (Decoder e a, Solver s l) => e -> SatSolver s l e
+constructValue e = State.get >>= (liftS . Map.foldWithKey f (return e))
+  where f atm v m = case extract atm of
+                      Just a -> getModelValue v >>= \ val -> if val then add a `liftM` m else m
+                      Nothing -> m
+
+getAssign :: (Ord l, Solver s l) => SatSolver s l (Assign l)
+getAssign = State.get >>= Map.foldWithKey f (return Assign.empty)
+    where f k l m  = do assign <- m
+                        v <- liftS $ getModelValue l
+                        return $ Assign.add [Right k |-> v] assign
 
 ifM :: Monad m =>  m Bool -> m a -> m a -> m a
 ifM mc mt me = do c <- mc
                   if c then mt else me
 
-run_ :: (Monad s, SatMonad s) => SatSolver s l r -> IO r
-run_ m = run $ State.evalStateT m Map.empty
+runSolver :: (Solver s l) => SatSolver s l r -> IO r
+runSolver (SatSolver m) = run $ State.evalStateT m Map.empty
 
-value :: (Decoder e a, Monad s, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)
-value m p = run_ $ m >> ifM (lift solve) (Just `liftM` constructValue p) (return Nothing)
+
+
+value :: (Decoder e a, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)
+value m p = runSolver $ m >> ifM (liftS solve) (Just `liftM` constructValue p) (return Nothing)

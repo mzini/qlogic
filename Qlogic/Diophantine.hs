@@ -25,6 +25,7 @@ module Qlogic.Diophantine
   , toFormula
   , constToPoly
   , varToPoly
+  , restrictVarToPoly
   , add
   , bigAdd
   , mult
@@ -54,7 +55,7 @@ import Qlogic.Utils
 
 data DioVar  = forall a. (DioVarClass a) => DioVar a deriving Typeable
 
-data VPower a = VPower a Int
+data VPower a = VPower a Int | RestrictVar a Int
   deriving (Eq, Ord, Show, Typeable)
 
 data DioMono a b = DioMono b [VPower a]
@@ -316,6 +317,14 @@ powerToNat n fm@(VPower v m) | m > 1  = maybeComputePower fm $
                     where newmax         = powerBound n fm
 powerToNat n fm@(VPower v m) | m == 1 = maybeComputePower fm $ natComputation_ (formAtom n v) n
 powerToNat n (VPower v m) | otherwise = return one
+powerToNat n fm@(RestrictVar v m) | m > 1  = maybeComputePower fm $
+                                        do State.modify (\s -> s{vars = Set.insert v $ vars s})
+                                           pres <- powerToNat n (RestrictVar v 1)
+                                           qres <- powerToNat n (RestrictVar v (pred m))
+                                           natComputation_ (prod pres qres) newmax
+                    where newmax         = powerBound n fm
+powerToNat n fm@(RestrictVar v m) | m == 1 = maybeComputePower fm $ natComputation_ (formAtom SR.one v) n
+powerToNat n (RestrictVar v m) | otherwise = return one
 
 polyBound :: SR.Semiring b => b -> DioPoly a b -> b
 polyBound n = SR.bigPlus . map (monoBound n)
@@ -324,13 +333,17 @@ monoBound :: SR.Semiring b => b -> DioMono a b -> b
 monoBound n (DioMono m xs) = foldr (SR.prod . powerBound n) m xs
 
 powerBound :: SR.Semiring b => b -> VPower a -> b
-powerBound n (VPower x m) = SR.bigProd $ replicate m n
+powerBound n (VPower _ m) = SR.bigProd $ replicate m n
+powerBound _ (RestrictVar _ _) = SR.one
 
 constToPoly :: b -> DioPoly a b
 constToPoly n = [DioMono n []]
 
 varToPoly :: SR.Semiring b => a -> DioPoly a b
 varToPoly v = [DioMono SR.one [VPower v 1]]
+
+restrictVarToPoly :: SR.Semiring b => a -> DioPoly a b
+restrictVarToPoly v = [DioMono SR.one [RestrictVar v 1]]
 
 add :: (Eq a, Eq b, SR.Semiring b) => DioPoly a b -> DioPoly a b -> DioPoly a b
 add p = shallowSimp . (++) p
@@ -367,8 +380,16 @@ simpPower :: Eq a => [VPower a] -> [VPower a]
 simpPower [] = []
 simpPower ((VPower v n):xs) | n == 0    = simpPower xs
 simpPower ((VPower v n):xs) | otherwise = (VPower v (foldl addpow n xss)):(simpPower yss)
-                                          where (xss, yss)            = List.partition (\(VPower w _) -> v == w) xs
-                                                addpow x (VPower _ y) = x `SR.plus` y
+                                          where (xss, yss)              = List.partition isRightPow xs
+                                                isRightPow (VPower w _) = v == w
+                                                isRightPow _            = False
+                                                addpow x (VPower _ y)   = x `SR.plus` y
+simpPower ((RestrictVar v n):xs) | n == 0    = simpPower xs
+simpPower ((RestrictVar v n):xs) | otherwise = (RestrictVar v (foldl addpow n xss)):(simpPower yss)
+                                          where (xss, yss)                   = List.partition isRightPow xs
+                                                isRightPow (RestrictVar w _) = v == w
+                                                isRightPow _                 = False
+                                                addpow x (RestrictVar _ y)   = x `SR.plus` y
 
 
 -- toFormulaSimp :: DioVarClass a => Size -> DioFormula l a -> PropFormula

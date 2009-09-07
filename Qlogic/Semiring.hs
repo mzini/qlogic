@@ -12,6 +12,7 @@ class RingConst a where
   czero :: a
   cone :: a
   ringvar :: PropAtom b => b -> a
+  restrictvar :: PropAtom b => b -> a
 
 class Semiring a where
   plus :: a -> a -> a
