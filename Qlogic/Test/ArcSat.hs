@@ -14,8 +14,8 @@ import Qlogic.ArcSat
 import qualified Qlogic.Assign as A
 import Qlogic.Boolean
 import Qlogic.Formula
-import Qlogic.MiniSat
 import qualified Qlogic.NatSat as N
+import Qlogic.MiniSat
 import Qlogic.PropositionalFormula
 import Qlogic.SatSolver hiding (run)
 
@@ -94,7 +94,7 @@ correctEncoding (Top, ps) = all (== Bot) ps
 correctEncoding _         = False
 
 options = TestOptions
-      { no_of_tests         = 200
+      { no_of_tests         = 300
       , length_of_tests     = 10
       , debug_tests         = False }
 

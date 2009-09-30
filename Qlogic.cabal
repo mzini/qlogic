@@ -7,7 +7,7 @@ author:             The Authors
 maintainer:         nobody@nodomain.at
 license:            LGPL
 cabal-version:      >= 1.6
-build-type:	    Simple
+build-type:         Simple
 
 
 library

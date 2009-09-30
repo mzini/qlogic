@@ -37,7 +37,7 @@ import Prelude hiding ((&&),(||),not)
 import qualified Prelude as Prelude
 import qualified Qlogic.Arctic as A
 import qualified Qlogic.ArcSat as AS
-import Qlogic.NatSat hiding (bigPlus)
+import qualified Qlogic.NatSat as N
 import Qlogic.SatSolver hiding (add)
 import Qlogic.Boolean
 import Qlogic.Formula hiding (simplify)
@@ -69,21 +69,21 @@ data DioAtom a b = Grt (DioPoly a b) (DioPoly a b)
                  deriving (Eq, Ord, Show, Typeable)
 
 class (Solver s l, SizeSemiring b) => MSemiring s l f a b | f -> a, f -> b, f -> s, f -> l, b -> f where
-  plus :: f -> f -> NatMonad s l f
+  plus :: f -> f -> N.NatMonad s l f
   plus x y = bigPlus [x, y]
-  prod :: f -> f -> NatMonad s l f
+  prod :: f -> f -> N.NatMonad s l f
   prod x y = bigProd [x, y]
   zero :: f
   one :: f
-  geq :: f -> f -> NatMonad s l (PropFormula l)
-  grt :: f -> f -> NatMonad s l (PropFormula l)
-  equ :: f -> f -> NatMonad s l (PropFormula l)
+  geq :: f -> f -> N.NatMonad s l (PropFormula l)
+  grt :: f -> f -> N.NatMonad s l (PropFormula l)
+  equ :: f -> f -> N.NatMonad s l (PropFormula l)
   constToFormula :: b -> f
-  formAtom :: b -> a -> NatMonad s l f
+  formAtom :: b -> a -> N.NatMonad s l f
   truncFormTo :: Int -> f -> f
-  bigPlus :: [f] -> NatMonad s l f
+  bigPlus :: [f] -> N.NatMonad s l f
   bigPlus = foldM plus zero
-  bigProd :: [f] -> NatMonad s l f
+  bigProd :: [f] -> N.NatMonad s l f
   bigProd = foldM prod one
 
 class SR.Semiring b => SizeSemiring b where
@@ -91,8 +91,8 @@ class SR.Semiring b => SizeSemiring b where
   bitsToSize :: Int -> b
 
 instance SizeSemiring Int where
-  sizeToBits n = bits $ Bound n
-  bitsToSize n = bound $ Bits n
+  sizeToBits n = N.bits $ N.Bound n
+  bitsToSize n = N.bound $ N.Bits n
 
 instance SizeSemiring A.ArcInt where
   sizeToBits = AS.arcToBits
@@ -280,13 +280,13 @@ toFormula = toFormulaGen toFormula'
 toFormula' :: (Eq l, Ord l, Ord b, DioVarClass a, MSemiring s l f a b) => b -> DioFormula l a b -> DioMonad s l a b f (PropFormula l)
 toFormula' = toFormGen polyToNat
 
-natComputation :: MSemiring s l f a b => NatMonad s l g -> DioMonad s l a b f g
+natComputation :: MSemiring s l f a b => N.NatMonad s l g -> DioMonad s l a b f g
 natComputation m =
-    do (r,fms) <- liftD $ runNatMonad m
+    do (r,fms) <- liftD $ N.runNatMonad m
        State.modify $ \s -> s{formulas = fms ++ formulas s}
        return r
 
-natComputation_ :: MSemiring s l f a b => NatMonad s l f -> b -> DioMonad s l a b f f
+natComputation_ :: MSemiring s l f a b => N.NatMonad s l f -> b -> DioMonad s l a b f f
 natComputation_ m b =
     do r <- natComputation m
        return $ truncFormTo (sizeToBits b) r

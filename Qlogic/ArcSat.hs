@@ -34,33 +34,14 @@ bitsToArc n = Fin $ (2 ^ (n - 1)) - 1
 
 arcToFormula :: Eq l => ArcInt -> ArcFormula l
 arcToFormula MinusInf = (Top, [Bot])
-arcToFormula (Fin x)  = (Bot, twoComplement x)
-
-twoComplement :: Eq l => Int -> [PropFormula l]
-twoComplement n | n == -1   = [Top]
-                | n == 0    = [Bot]
-                | n >= 1    = Bot : N.natToFormula n
-                | otherwise = Top : (map not $ N.natToFormula $ abs n - 1)
+arcToFormula (Fin x)  = (Bot, N.twoComplement x)
 
 padFront :: Int -> ArcFormula l -> ArcFormula l
-padFront n (b, xs) = (b, padFront' n xs)
-
-padFront' :: Int -> [PropFormula l] -> [PropFormula l]
-padFront' n xs | n == 0    = xs
-               | n > 0     = (if null xs then Bot else head xs) : padFront' (n - 1) xs
-               | otherwise = error "ArcSat.padFront: Only natural numbers allowed in argument!"
-
--- AS: TODO: keine frische Variable für sehr simple (head xs) Fälle
-padFrontM' :: (Eq l, Sat.Solver s l) => Int -> [PropFormula l] -> N.NatMonad s l [PropFormula l]
-padFrontM' n xs | n == 0    = return xs
-                | n > 0     = if null xs then return $ replicate n Bot else
-                              do c <- N.maybeFreshVar $ return $ head xs
-                                 return $ replicate n c ++ (c : tail xs)
-                | otherwise = error "ArcSat.padFrontM: Only natural numbers allowed in argument!"
+padFront n (b, xs) = (b, N.padFront n xs)
 
 -- truncFront :: Eq l => ArcFormula l -> ArcFormula l
 -- truncFront (b, xs) = (b, truncFront' xs)
--- 
+--
 -- truncFront' :: Eq l => [PropFormula l] -> [PropFormula l]
 -- truncFront' xs | length xs <= 2 = xs
 --                | otherwise      = if x1 == x2 then truncFront' (x1 : xs') else xs
@@ -78,7 +59,7 @@ truncTo' n xs | length xs <= Prelude.max 1 n = xs
                                                      xs' = tail xs
 
 mAdd :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (ArcFormula l)
-mAdd p@(a, xs) q@(b, ys) | lengthdiff > 0 = do xs' <- padFrontM' lengthdiff xs
+mAdd p@(a, xs) q@(b, ys) | lengthdiff > 0 = do xs' <- N.padFrontM lengthdiff xs
                                                mAdd (a, xs') (b, ys)
                          | lengthdiff < 0 = mAdd q p
                          | otherwise      = do c1 <- N.maybeFreshVar $ p .>=. q
@@ -88,53 +69,36 @@ mAdd p@(a, xs) q@(b, ys) | lengthdiff > 0 = do xs' <- padFrontM' lengthdiff xs
   where lengthdiff = length ys - length xs
 
 mTimes :: (Ord l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (ArcFormula l)
-mTimes p@(a, xs) q@(b, ys) | lengthdiff > 0 = do xs' <- padFrontM' lengthdiff xs
+mTimes p@(a, xs) q@(b, ys) | lengthdiff > 0 = do xs' <- N.padFrontM lengthdiff xs
                                                  mTimes (a, xs') (b, ys)
                            | lengthdiff < 0 = mTimes q p
                            | otherwise      = do c <- N.maybeFreshVar $ return $ (a || b)
                                                  uress' <- N.mAdd xs ys
-                                                 let uress = N.padBots (1 Prelude.+ length xs - length uress') uress'
-                                                 case uress of
-                                                   []     -> return (c, [])
-                                                   u : us -> do cu <- N.maybeFreshVar $ return $ oneOrThree u x y
-                                                                cs <- mapM (N.maybeFreshVar . return . (not c &&)) (cu : us)
-                                                                return (c, cs)
-                                                                where x  = if null xs then Bot else head xs
-                                                                      y  = if null ys then Bot else head ys
+                                                 uress  <- mapM (N.maybeFreshVar . return . (not c &&)) uress'
+                                                 return (c, uress)
   where lengthdiff = length ys - length xs
 
 (.>.) :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (PropFormula l)
-(a, xs) .>. (b, ys) | lengthdiff > 0 = do xs' <- padFrontM' lengthdiff xs
+(a, xs) .>. (b, ys) | lengthdiff > 0 = do xs' <- N.padFrontM lengthdiff xs
                                           (a, xs') .>. (b, ys)
-                    | lengthdiff < 0 = do ys' <- padFrontM' (abs lengthdiff) ys
+                    | lengthdiff < 0 = do ys' <- N.padFrontM (abs lengthdiff) ys
                                           (a, xs) .>. (b, ys')
-                    | otherwise      = do subresult <- xss `N.mGrt` yss
-                                          return $ b || (not a && ((not x && y) || ((x --> y) && subresult)))
-                                          where x   = if null xs then Bot else head xs
-                                                y   = if null ys then Bot else head ys
-                                                xss = if null xs then [] else tail xs
-                                                yss = if null ys then [] else tail ys
-                                                lengthdiff = length ys - length xs
+                    | otherwise      = do subresult <- xs `N.mGrt` ys
+                                          return $ b || (not a && subresult)
+                                          where lengthdiff = length ys - length xs
 
 (.>=.) :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (PropFormula l)
-(a, xs) .>=. (b, ys) | lengthdiff > 0 = do xs' <- padFrontM' lengthdiff xs
+(a, xs) .>=. (b, ys) | lengthdiff > 0 = do xs' <- N.padFrontM lengthdiff xs
                                            (a, xs') .>=. (b, ys)
-                     | lengthdiff < 0 = do ys' <- padFrontM' (abs lengthdiff) ys
+                     | lengthdiff < 0 = do ys' <- N.padFrontM (abs lengthdiff) ys
                                            (a, xs) .>=. (b, ys')
-                     | otherwise      = do subresult <- xss `N.mGeq` yss
-                                           return $ b || (not a && ((not x && y) || ((x --> y) && subresult)))
-                                           where x   = if null xs then Bot else head xs
-                                                 y   = if null ys then Bot else head ys
-                                                 xss = if null xs then [] else tail xs
-                                                 yss = if null ys then [] else tail ys
-                                                 lengthdiff = length ys - length xs
+                     | otherwise      = do subresult <- xs `N.mGeq` ys
+                                           return $ b || (not a && subresult)
+                                           where lengthdiff = length ys - length xs
 
 (.=.) :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (PropFormula l)
-p@(a, xs) .=. q@(b, ys) | lengthdiff > 0 = do xs' <- padFrontM' lengthdiff xs
-                                              (a, xs') .=. (b, ys)
-                        | lengthdiff < 0 = q .=. p
-                        | otherwise      = return $ (a <-> b) && bigAnd (zipWith (<->) xs ys)
-  where lengthdiff = length ys - length xs
+p@(a, xs) .=. q@(b, ys) = do subresult <- xs `N.mEqu` ys
+                             return $ (a <-> b) && subresult
 
 soundInf :: (Eq l, PropAtom a) => ArcInt -> a -> PropFormula l
 soundInf n v = soundInf' (arcToBits n) v
