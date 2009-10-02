@@ -13,6 +13,7 @@ build-type:         Simple
 library
  exposed-modules:   Qlogic.Arctic
                     Qlogic.ArcSat
+                    Qlogic.BzSat
                     Qlogic.Semiring
                     Qlogic.Formula
                     Qlogic.Formula.NoLaw
@@ -20,6 +21,7 @@ library
                     Qlogic.SatSolver
                     Qlogic.MiniSat
                     Qlogic.NatSat
+                    Qlogic.IntSat
                     Qlogic.Boolean
                     Qlogic.Diophantine
                     Qlogic.MemoizedFormula

@@ -122,7 +122,7 @@ instance PropAtom a => DioVarClass a
 type DioFormula l a b = Formula l (DioAtom a b)
 
 instance Show DioVar where
-  show (DioVar a) = "DioVar " ++ show  a
+  show (DioVar a) = "DioVar (" ++ show a ++ ")"
 
 compareDioVar :: DioVar -> DioVar -> Ordering
 DioVar (a :: at) `compareDioVar` DioVar (b :: bt) | ta == tb = (cast a :: Maybe at) `compare` (cast b :: Maybe at)
