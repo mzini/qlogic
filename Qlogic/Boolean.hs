@@ -3,6 +3,7 @@
 
 module Qlogic.Boolean where
 
+import Control.Monad
 import Prelude hiding ((&&),(||),not,foldl,foldr)
 import qualified Prelude as Prelude
 import Data.Foldable
@@ -85,4 +86,3 @@ oneOrThree p q r = p <-> q <-> r
 twoOrThree :: Boolean a => a -> a -> a -> a
 -- ^ demands that exacly two or all three formulas hold.
 twoOrThree p q r = (p || q) && (p || r) && (q || r)
-

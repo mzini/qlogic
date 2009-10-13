@@ -135,6 +135,16 @@ maybeFreshVar mf = mf >>= f
                         enforce [c <-> fml]
                         return c
 
+instance (Solver s l, Boolean r) => Boolean (NatMonad s l r) where
+  (&&) = liftM2 (&&)
+  (||) = liftM2 (||)
+  not = liftM not
+  top = return top
+  bot = return bot
+  (<->) = liftM2 (<->)
+  (-->) = liftM2 (-->)
+  ite = liftM3 ite
+
 truncBots :: NatFormula l -> NatFormula l
 -- ^ removes leading Bottoms from a list of propositional formulas
 --   however, the last Bot in a list consisting only of Bots is never removed
