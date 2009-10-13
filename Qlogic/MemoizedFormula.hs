@@ -7,6 +7,7 @@
 module Qlogic.MemoizedFormula 
     ( toFormula 
     , memoized
+    , liftSat
     , MemoFormula
     , Memo)
 where 
@@ -65,7 +66,8 @@ memoized f arg = do ll <- cachedLiteral arg
                                      return $ literal l
                                    }
 
-
+liftSat :: (Solver s l, Eq l) => SatSolver s l (PropFormula l) -> MemoFormula arg s l
+liftSat m = Memo $ lift m
 
 -- toFormula :: (Solver s l, Eq l, State.MonadIO s) => MemoFormula arg s l -> SatSolver s l (PropFormula l)
 toFormula (Memo fm) = do (f, st) <- State.runStateT fm initialState
