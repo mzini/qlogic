@@ -115,6 +115,10 @@ liftN = NatMonad . lift
 runNatMonad :: NatMonad s l r -> SatSolver s l (r, [PropFormula l])
 runNatMonad (NatMonad m) = State.runStateT m []
 
+toFormula :: (Eq l, Monad s) =>  NatMonad s l (PropFormula l) -> SatSolver s l (PropFormula l)
+toFormula m = do (r,fms) <- runNatMonad m
+                 return $ bigAnd (r : fms)
+
 freshVar :: Solver s l => NatMonad s l (PropFormula l)
 freshVar = literal `liftM` liftN freshLit
 
