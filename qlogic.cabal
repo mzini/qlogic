@@ -1,0 +1,38 @@
+Name:               Qlogic
+Version:            0.5
+Author:             Martin Avanzini, 
+                    Georg Moser, 
+                    Andreas Schnabl
+Category:           Math
+Maintainer:         Martin Avanzini <martin.avanzini@uibk.ac.at>
+Stability:          Experimental
+License:            LGPL
+License-file:       COPYING.LESSER
+Homepage:           http://cl-informatik.uibk.ac.at/software/tct/
+
+Synopsis:           A Haskell Library for Propositional Logic
+Description:
+  This is a Haskell library for propositional logic.
+  In particular, it provides an interface to the MiniSat SAT solver 
+  based on folkung (http://www.cs.chalmers.se/~koen/folkung/).
+cabal-version:      >= 1.6
+build-type:         Simple
+library
+ Exposed-modules:   Qlogic.Arctic
+                    Qlogic.ArcSat
+                    Qlogic.BzSat
+                    Qlogic.Semiring
+                    Qlogic.Formula
+                    Qlogic.Formula.NoLaw
+                    Qlogic.Assign
+                    Qlogic.SatSolver
+                    Qlogic.MiniSat
+                    Qlogic.NatSat
+                    Qlogic.IntSat
+                    Qlogic.Boolean
+                    Qlogic.Diophantine
+                    Qlogic.MemoizedFormula
+                    Qlogic.PropositionalFormula
+ other-modules:     Qlogic.Utils
+ build-depends:     containers, mtl, base>=4.0.0.0, pretty, syb, folkung-sat, parallel
+ ghc-options:       -O2 -fvia-C
