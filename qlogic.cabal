@@ -1,4 +1,4 @@
-Name:               Qlogic
+Name:               qlogic
 Version:            0.5
 Author:             Martin Avanzini, 
                     Georg Moser, 
@@ -9,7 +9,6 @@ Stability:          Experimental
 License:            LGPL
 License-file:       COPYING.LESSER
 Homepage:           http://cl-informatik.uibk.ac.at/software/tct/
-
 Synopsis:           A Haskell Library for Propositional Logic
 Description:
   This is a Haskell library for propositional logic.
