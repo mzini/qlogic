@@ -30,10 +30,13 @@ module Qlogic.SatSolver
     , Solver(..)
     , Clause(..)
     , Decoder(..)
+    , SatError (..)
     , (:&:) (..)
     , addFormula
     , fix
     , value
+    , assignment
+    , checkFormula
     , freshLit
     , getAssign
     , runSolver
@@ -41,8 +44,6 @@ module Qlogic.SatSolver
     , liftIO
     )
 where
-
-import System.IO.Unsafe (unsafePerformIO)
 
 import Control.Monad
 import Control.Monad.Trans (lift, liftIO, MonadIO)
@@ -55,6 +56,7 @@ import qualified Control.Monad.State.Class as StateClass
 import Prelude hiding (negate)
 
 import Qlogic.Formula
+import Control.Monad.Error hiding (fix)
 import Qlogic.PropositionalFormula
 
 newtype Clause l = Clause {clauseToList :: [l]}
@@ -74,11 +76,24 @@ data ExtLit l = Lit !l | TopLit | BotLit deriving (Eq, Show)
 
 data Polarity = PosPol | NegPol
 
-newtype SatSolver s l r = SatSolver (State.StateT (Map.Map PA l) s r)
-    deriving (Monad, StateClass.MonadState (Map.Map PA l), MonadIO)
+data State l = State { litMap :: Map.Map PA l
+                     , assertedFms :: [PropFormula l] }
+
+data SatError = Unsatisfiable 
+              | AssertFailed
+
+instance Error SatError where 
+    strMsg = undefined
+
+newtype SatSolver s l r = SatSolver (ErrorT SatError (State.StateT (State l) s) r)
+    deriving (Monad, StateClass.MonadState (State l), MonadIO, MonadError SatError)
 
 liftS :: Solver s l => s r -> SatSolver s l r 
-liftS = SatSolver . lift
+liftS = SatSolver . lift . lift
+
+
+runSolver :: (Solver s l) => SatSolver s l r -> IO (Either SatError r)
+runSolver (SatSolver m) = run $ State.evalStateT (runErrorT m) $ State Map.empty []
 
 freshLit :: Solver s l => SatSolver s l l
 freshLit = liftS newLit
@@ -86,13 +101,19 @@ freshLit = liftS newLit
 freshELit :: Solver s l => SatSolver s l (ExtLit l)
 freshELit = Lit `liftM` freshLit
 
+getLitMap :: (Solver s l) => SatSolver s l (Map.Map PA l)
+getLitMap = litMap `liftM` State.get
+
+putLitMap :: (Solver s l) => (Map.Map PA l) -> SatSolver s l ()
+putLitMap lm = State.modify (\s -> s{litMap = lm})
+
 atomToELit :: Solver s l => PA -> SatSolver s l (ExtLit l)
-atomToELit a = do litMap <- State.get
-                  case Map.lookup a litMap of
+atomToELit a = do lm <- getLitMap
+                  case Map.lookup a lm of 
                     Just oldLit -> return $ Lit oldLit
-                    Nothing     -> do l <- freshLit
-                                      State.put $ Map.insert a l litMap
-                                      return (Lit l)
+                    Nothing     -> do {l <- freshLit;
+                                      putLitMap (Map.insert a l lm);
+                                      return (Lit l)}
 
 negateELit :: (Solver s l) => ExtLit l -> SatSolver s l (ExtLit l)
 negateELit (Lit x) = Lit `liftM` liftS  (negate x)
@@ -231,7 +252,8 @@ addFormula :: (Show l, Eq l, Solver s l) => PropFormula l -> SatSolver s l ()
 addFormula fm =
 -- unsafePerformIO $ do putStrLn $ show fm
 --                     return $
-  do p <- addPositively fm
+  do checkFormula fm  -- todo: remove somewhen
+     p <- addPositively fm
      addLitClause $ Clause [p]
      return ()
 
@@ -261,25 +283,36 @@ instance (Decoder e1 a1, Decoder e2 a2) => Decoder (e1 :&: e2) (OneOf a1 a2) whe
   add (Bar b) (e1 :&: e2) = e1 :&: (add b e2)
 
 constructValue :: (Decoder e a, Solver s l) => e -> SatSolver s l e
-constructValue e = State.get >>= (liftS . Map.foldWithKey f (return e))
+constructValue e = getLitMap >>= (liftS . Map.foldWithKey f (return e))
   where f atm v m = case extract atm of
                       Just a -> getModelValue v >>= \ val -> if val then add a `liftM` m else m
                       Nothing -> m
 
 getAssign :: (Ord l, Solver s l) => SatSolver s l (Assign l)
-getAssign = State.get >>= Map.foldWithKey f (return Assign.empty)
+getAssign = getLitMap >>= Map.foldWithKey f (return Assign.empty)
     where f k l m  = do assign <- m
                         v <- liftS $ getModelValue l
                         return $ Assign.add [Right k |-> v] assign
+
+
+checkFormula :: (Solver s l) => PropFormula l -> SatSolver s l ()
+checkFormula fm = State.modify (\s -> s{assertedFms = fm : assertedFms s})
+
 
 ifM :: Monad m =>  m Bool -> m a -> m a -> m a
 ifM mc mt me = do c <- mc
                   if c then mt else me
 
-runSolver :: (Solver s l) => SatSolver s l r -> IO r
-runSolver (SatSolver m) = run $ State.evalStateT m Map.empty
+solveAndCheck :: (Ord l, Solver s l) => SatSolver s l ()
+solveAndCheck = ifM (liftS solve) 
+                (do { fms <- assertedFms `liftM` State.get;
+                      assign <- getAssign;
+                      forM_ fms $ \ fm -> if Assign.eval fm assign then return () else throwError AssertFailed})
+                (throwError Unsatisfiable)
 
+value :: (Ord l, Decoder e a, Solver s l) => SatSolver s l () -> e -> IO (Either SatError e)
+value m p = runSolver $ m >> solveAndCheck >> constructValue p
 
+assignment :: (Ord l, Solver s l) => SatSolver s l () -> IO (Either SatError (Assign l))
+assignment m = runSolver $ m >> solveAndCheck >> getAssign
 
-value :: (Decoder e a, Solver s l) => SatSolver s l () -> e -> IO (Maybe e)
-value m p = runSolver $ m >> ifM (liftS solve) (Just `liftM` constructValue p) (return Nothing)
