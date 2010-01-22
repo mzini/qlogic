@@ -107,13 +107,17 @@ getLitMap = litMap `liftM` State.get
 putLitMap :: (Solver s l) => (Map.Map PA l) -> SatSolver s l ()
 putLitMap lm = State.modify (\s -> s{litMap = lm})
 
+
 atomToELit :: Solver s l => PA -> SatSolver s l (ExtLit l)
-atomToELit a = do lm <- getLitMap
-                  case Map.lookup a lm of 
-                    Just oldLit -> return $ Lit oldLit
+atomToELit a = Lit `liftM` atomToLit a
+
+atomToLit :: Solver s l => PA -> SatSolver s l l
+atomToLit a = do lm <- getLitMap
+                 case Map.lookup a lm of 
+                    Just oldLit -> return oldLit
                     Nothing     -> do {l <- freshLit;
                                       putLitMap (Map.insert a l lm);
-                                      return (Lit l)}
+                                      return l}
 
 negateELit :: (Solver s l) => ExtLit l -> SatSolver s l (ExtLit l)
 negateELit (Lit x) = Lit `liftM` liftS  (negate x)
@@ -250,8 +254,6 @@ addNegatively' (_,n) Bot         = return BotLit
 
 addFormula :: (Show l, Eq l, Solver s l) => PropFormula l -> SatSolver s l ()
 addFormula fm =
--- unsafePerformIO $ do putStrLn $ show fm
---                     return $
   do checkFormula fm  -- todo: remove somewhen
      p <- addPositively fm
      addLitClause $ Clause [p]
@@ -303,11 +305,30 @@ ifM :: Monad m =>  m Bool -> m a -> m a -> m a
 ifM mc mt me = do c <- mc
                   if c then mt else me
 
+assertFormula :: (Solver s l) => PropFormula l -> SatSolver s l ()
+assertFormula fm = do r <- eval fm
+                      if r then return () else throwError AssertFailed
+    where eval (A a)        = do l <- atomToLit a 
+                                 liftS $ getModelValue l 
+          eval (SL a)       = liftS $ getModelValue a
+          eval (And l)      = all id `liftM` mapM eval l
+          eval (Or l)       = any id `liftM` mapM eval l
+          eval (a `Iff` b)  = do r <- eval a 
+                                 s <- eval b
+                                 return $ r == s
+          eval (a `Imp` b)  = do r <- eval a 
+                                 s <- eval b
+                                 return $ (not r) || s
+          eval (Neg a)      = not `liftM` eval a
+          eval Top          = return True
+          eval Bot          = return False
+          eval (Ite a b c)  = do g <- eval a 
+                                 if g then eval b else eval c
+
+
 solveAndCheck :: (Ord l, Solver s l) => SatSolver s l ()
 solveAndCheck = ifM (liftS solve) 
-                (do { fms <- assertedFms `liftM` State.get;
-                      assign <- getAssign;
-                      forM_ fms $ \ fm -> if Assign.eval fm assign then return () else throwError AssertFailed})
+                (assertedFms `liftM` State.get >>= mapM_ assertFormula)
                 (throwError Unsatisfiable)
 
 value :: (Ord l, Decoder e a, Solver s l) => SatSolver s l () -> e -> IO (Either SatError e)
