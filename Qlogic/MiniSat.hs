@@ -20,24 +20,53 @@ along with the Haskell Qlogic Library.  If not, see <http://www.gnu.org/licenses
 
 module Qlogic.MiniSat where
 
-import Control.Monad
-import Control.Monad.Trans (lift, MonadIO(..))
-import qualified Sat as Sat
+import qualified Control.Monad.State.Lazy as State
+import Control.Concurrent (forkOS)
+import Control.Concurrent.MVar (takeMVar, putMVar, newEmptyMVar)
+import qualified Data.IntSet as Set
+import qualified Data.List as List
 import Qlogic.SatSolver
-type MiniSatSolver = Sat.S
+import System.Process (readProcessWithExitCode)
+import Foreign (unsafePerformIO)
 
-instance MonadIO MiniSatSolver where 
-    liftIO = Sat.lift
+type MiniSatSolver = State.StateT St IO
 
-type MiniSatLiteral = Sat.Lit
+data St = St { lastLit :: MiniSatLiteral
+             , clauseCount :: Int
+             , addedFormula :: String
+             , assign :: Set.IntSet}
 
-instance Solver MiniSatSolver MiniSatLiteral where
-    solve         = Sat.solve []
-    run           = Sat.run
-    newLit        = Sat.newLit
-    negate        = return . Sat.neg
-    addClause     = Sat.addClause . clauseToList
-    getModelValue = Sat.getModelValue
+emptySt :: St
+emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty}
+
+type MiniSatLiteral = Int
 
 type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 
+instance Solver MiniSatSolver MiniSatLiteral where
+    solve                 = do mv <- liftIO newEmptyMVar
+                               st <- State.get
+                               liftIO $ forkOS $ minithread mv $ addedFormula st
+                               satresult <- liftIO $ takeMVar mv
+                               case satresult of
+                                 Just satassign -> do (mapM_ addposass $ filter ((<) 0) $ map (read :: String -> Int) $ words satassign)
+                                                      -- st'' <- State.get
+                                                      -- liftIO $ putStrLn $ show $ assign st''
+                                                      return True
+                                                        where addposass l = do st' <- State.get
+                                                                               State.put st'{assign = Set.insert l $ assign st'}
+                                 Nothing        -> return False
+                                 where minithread mv cnf = do (exitcode1, stdout, stderr) <- readProcessWithExitCode "minisat" ["/dev/stdin", "/dev/stdout"] cnf
+                                                              case lines stdout of
+                                                                "SAT" : satassign : _ -> putMVar mv $ Just satassign
+                                                                _                     -> putMVar mv Nothing
+    run m                 = State.evalStateT m emptySt
+    newLit                = do st <- State.get
+                               State.put st{lastLit = lastLit st + 1}
+                               return $ lastLit st + 1
+    negate l              = return $ l * (-1)
+    addClause (Clause ls) = do st <- State.get
+                               State.put st{clauseCount = clauseCount st + 1, addedFormula = concat (List.intersperse " " (map show ls))  ++ (" 0 " ++ addedFormula st)}
+                               return True
+    getModelValue l       = do st <- State.get
+                               return $ Set.member l $ assign st

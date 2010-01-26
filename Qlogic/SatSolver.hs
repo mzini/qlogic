@@ -254,7 +254,7 @@ addNegatively' (_,n) Bot         = return BotLit
 
 addFormula :: (Show l, Eq l, Solver s l) => PropFormula l -> SatSolver s l ()
 addFormula fm =
-  do checkFormula fm  -- todo: remove somewhen
+  do -- checkFormula fm  -- todo: remove somewhen
      p <- addPositively fm
      addLitClause $ Clause [p]
      return ()
@@ -327,8 +327,8 @@ assertFormula fm = do r <- eval fm
 
 
 solveAndCheck :: (Ord l, Solver s l) => SatSolver s l ()
-solveAndCheck = ifM (liftS solve) 
-                (assertedFms `liftM` State.get >>= mapM_ assertFormula)
+solveAndCheck = ifM (liftS solve)
+                (return ()) -- (assertedFms `liftM` State.get >>= mapM_ assertFormula)
                 (throwError Unsatisfiable)
 
 value :: (Ord l, Decoder e a, Solver s l) => SatSolver s l () -> e -> IO (Either SatError e)
