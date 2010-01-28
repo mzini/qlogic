@@ -36,7 +36,6 @@ import Qlogic.Boolean
 import Qlogic.PropositionalFormula
 import Qlogic.SatSolver 
 import Control.Monad
-import qualified Sat as Sat
 import qualified Control.Monad.State.Lazy as State
 import qualified Control.Monad.State.Class as StateClass
 import Control.Monad.Trans

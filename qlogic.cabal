@@ -33,5 +33,5 @@ library
                     Qlogic.MemoizedFormula
                     Qlogic.PropositionalFormula
  other-modules:     Qlogic.Utils
- build-depends:     containers, mtl, base>=4.0.0.0, process, pretty, syb, folkung-sat, parallel
+ build-depends:     containers, mtl, base>=4.0.0.0, process, pretty, syb, parallel
  ghc-options:       -threaded -O2 -fvia-C

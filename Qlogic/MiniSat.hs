@@ -21,13 +21,16 @@ along with the Haskell Qlogic Library.  If not, see <http://www.gnu.org/licenses
 module Qlogic.MiniSat where
 
 import qualified Control.Monad.State.Lazy as State
-import Control.Concurrent (forkOS)
+import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.MVar (takeMVar, putMVar, newEmptyMVar)
+import Control.Exception (evaluate, handle, AsyncException(..))
+import Control.Monad (when)
+import System.IO (hClose, hGetContents, hFlush, hPutStr)
 import qualified Data.IntSet as Set
 import qualified Data.List as List
 import Qlogic.SatSolver
-import System.Process (readProcessWithExitCode)
-import Foreign (unsafePerformIO)
+import System.Exit (ExitCode(..))
+import System.Process (CreateProcess(..), createProcess, proc, readProcessWithExitCode, StdStream(..), terminateProcess, waitForProcess)
 
 type MiniSatSolver = State.StateT St IO
 
@@ -46,9 +49,10 @@ type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 instance Solver MiniSatSolver MiniSatLiteral where
     solve                 = do mv <- liftIO newEmptyMVar
                                st <- State.get
-                               liftIO $ forkOS $ minithread mv $ addedFormula st
+                               liftIO $ forkIO $ minithread mv $ addedFormula st
                                satresult <- liftIO $ takeMVar mv
                                case satresult of
+-- handle (\ThreadKilled -> putMVar mv Nothing)
                                  Just satassign -> do (mapM_ addposass $ filter ((<) 0) $ map (read :: String -> Int) $ words satassign)
                                                       -- st'' <- State.get
                                                       -- liftIO $ putStrLn $ show $ assign st''
@@ -70,3 +74,44 @@ instance Solver MiniSatSolver MiniSatLiteral where
                                return True
     getModelValue l       = do st <- State.get
                                return $ Set.member l $ assign st
+
+-- myReadProcessWithExitCode
+--     :: FilePath                 -- ^ command to run
+--     -> [String]                 -- ^ any arguments
+--     -> String                   -- ^ standard input
+--     -> IO (ExitCode,String,String) -- ^ exitcode, stdout, stderr
+-- myReadProcessWithExitCode cmd args input = do
+--     (Just inh, Just outh, Just errh, pid) <-
+--         createProcess (proc cmd args){ std_in  = CreatePipe,
+--                                        std_out = CreatePipe,
+--                                        std_err = CreatePipe }
+-- 
+--     outMVar <- newEmptyMVar
+-- 
+--     -- fork off a thread to start consuming stdout
+--     out <- hGetContents outh
+--     outtid <- forkIO $ evaluate (length out) >> putMVar outMVar ()
+-- 
+--     -- fork off a thread to start consuming stderr
+--     err <- hGetContents errh
+--     errtid <- forkIO $ evaluate (length err) >> putMVar outMVar ()
+-- 
+--     -- now write and flush any input
+--     when (not (null input)) $ do hPutStr inh input; hFlush inh
+--     hClose inh -- done with stdin
+-- 
+--     handle (\ThreadKilled -> do hClose outh
+--                                 hClose errh
+--                                 killThread outtid
+--                                 killThread errtid
+--                                 terminateProcess pid
+--                                 return (ExitFailure 1, out, err))
+--       (do takeMVar outMVar
+--           takeMVar outMVar
+--           hClose outh
+--           hClose errh
+-- 
+--           -- wait on the process
+--           ex <- waitForProcess pid
+-- 
+--           return (ex, out, err))
