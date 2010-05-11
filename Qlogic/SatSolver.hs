@@ -81,9 +81,10 @@ data State l = State { litMap :: Map.Map PA l
 
 data SatError = Unsatisfiable 
               | AssertFailed
+              | OtherError String
 
 instance Error SatError where 
-    strMsg = undefined
+    strMsg = OtherError
 
 newtype SatSolver s l r = SatSolver (ErrorT SatError (State.StateT (State l) s) r)
     deriving (Monad, StateClass.MonadState (State l), MonadIO, MonadError SatError)
