@@ -56,6 +56,7 @@ instance Solver MiniSatSolver MiniSatLiteral where
                                            add l   = State.modify (\ st -> st{assign = Set.insert l $ assign st})
                                  Just _                          -> return False
                                  Nothing                         -> return False
+                               where snd (_, x, _) = x
     run m                 = State.evalStateT m emptySt
     newLit                = do st <- State.get
                                State.put st{lastLit = lastLit st + 1}
