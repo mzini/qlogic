@@ -23,7 +23,7 @@ module Qlogic.MiniSat where
 import qualified Control.Monad.State.Lazy as State
 import Control.Concurrent.Utils (spawn)
 import Control.Concurrent.MVar (takeMVar, putMVar, newEmptyMVar)
-import Control.Exception (evaluate, handle, AsyncException(..))
+import Control.Exception (evaluate, finally, AsyncException(..))
 import Control.Monad (liftM)
 import System.IO (hClose, hGetContents, hFlush, hPutStr)
 import qualified Data.IntSet as Set
@@ -65,4 +65,3 @@ instance Solver MiniSatSolver MiniSatLiteral where
                                return True
     getModelValue l       = do st <- State.get
                                return $ Set.member l $ assign st
-
