@@ -49,12 +49,13 @@ type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 instance Solver MiniSatSolver MiniSatLiteral where
     solve                 = do mv <- liftIO newEmptyMVar
                                st <- State.get
-                               out <- liftIO $ spawn "minisat" [] $ addedFormula st
-                               case lines `liftM` out of     
-                                 Right ("SAT" : satassign : _) -> mapM_ add poslits >> return True
-                                     where poslits = filter ((<) 0) $ [read l | l <- words satassign]
+                               out <- liftIO $ spawn "minisat" ["/dev/stdin","/dev/stdout"] $ addedFormula st
+                               case (lines . snd) `liftM` out of
+                                 Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
+                                     where poslits = filter ((<) 0) $ [(read :: String -> Int) l | l <- words satassign]
                                            add l   = State.modify (\ st -> st{assign = Set.insert l $ assign st})
-                                 Left _                        -> return False
+                                 Just _                          -> return False
+                                 Nothing                         -> return False
     run m                 = State.evalStateT m emptySt
     newLit                = do st <- State.get
                                State.put st{lastLit = lastLit st + 1}
