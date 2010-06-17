@@ -37,19 +37,23 @@ type MiniSatSolver = State.StateT St IO
 data St = St { lastLit :: MiniSatLiteral
              , clauseCount :: Int
              , addedFormula :: String
-             , assign :: Set.IntSet}
+             , assign :: Set.IntSet
+             , cmd    :: String}
 
 emptySt :: St
-emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty}
+emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat"}
 
 type MiniSatLiteral = Int
+
+setCmd :: String -> MiniSatSolver ()
+setCmd command = State.modify (\ st -> st {cmd = command})
 
 type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 
 instance Solver MiniSatSolver MiniSatLiteral where
     solve                 = do mv <- liftIO newEmptyMVar
                                st <- State.get
-                               out <- liftIO $ spawn "minisat" ["/dev/stdin","/dev/stdout"] $ addedFormula st
+                               out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ addedFormula st
                                case (lines . snd) `liftM` out of
                                  Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
                                      where poslits = filter ((<) 0) $ [(read :: String -> Int) l | l <- words satassign]

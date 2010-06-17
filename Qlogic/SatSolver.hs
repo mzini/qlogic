@@ -255,8 +255,7 @@ addNegatively' (_,n) Bot         = return BotLit
 
 addFormula :: (Show l, Eq l, Solver s l) => PropFormula l -> SatSolver s l ()
 addFormula fm =
-  do -- checkFormula fm  -- todo: remove somewhen
-     p <- addPositively fm
+  do p <- addPositively fm
      addLitClause $ Clause [p]
      return ()
 
@@ -265,7 +264,6 @@ fix l fm = do n <- negateELit elit
               addPositively' (elit,n) fm
               addNegatively' (elit,n) fm
               return ()
---              unsafePerformIO ((putStrLn $ show l ++ " := " ++ show fm) >> (return $ return ()))
     where elit = Lit l
 
 class Typeable a => Decoder e a | e -> a, a -> e where
@@ -329,7 +327,7 @@ assertFormula fm = do r <- eval fm
 
 solveAndCheck :: (Ord l, Solver s l) => SatSolver s l ()
 solveAndCheck = ifM (liftS solve)
-                (return ()) -- (assertedFms `liftM` State.get >>= mapM_ assertFormula)
+                (assertedFms `liftM` State.get >>= mapM_ assertFormula)
                 (throwError Unsatisfiable)
 
 value :: (Ord l, Decoder e a, Solver s l) => SatSolver s l () -> e -> IO (Either SatError e)
