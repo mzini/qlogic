@@ -22,7 +22,6 @@ module Qlogic.MiniSat where
 
 import qualified Control.Monad.State.Lazy as State
 import Control.Concurrent.Utils (spawn)
-import Control.Concurrent.MVar (takeMVar, putMVar, newEmptyMVar)
 import Control.Exception (evaluate, finally, AsyncException(..))
 import Control.Monad (liftM)
 import System.IO (hClose, hGetContents, hFlush, hPutStr)
@@ -49,8 +48,7 @@ type MiniSatLiteral = Int
 type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 
 instance Solver MiniSatSolver MiniSatLiteral where
-    solve                 = do mv <- liftIO newEmptyMVar
-                               st <- State.get
+    solve                 = do st <- State.get
                                out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ addedFormula st
                                case (lines . snd) `liftM` out of
                                  Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True

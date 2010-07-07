@@ -37,6 +37,7 @@ data PA = forall a. (PropAtom a) => PA a deriving Typeable
 
 type PropFormula l = Fm.Formula l PA
 
+
 compare_ :: PA -> PA -> Ordering
 PA (a :: at) `compare_` PA (b :: bt) 
     | ta == tb = (cast a :: Maybe at) `compare` (cast b :: Maybe at)
