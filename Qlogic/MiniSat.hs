@@ -40,7 +40,7 @@ data St = St { lastLit :: MiniSatLiteral
              , cmd    :: String}
 
 emptySt :: St
-emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat"}
+emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat2"}
 
 type MiniSatLiteral = Int
 
