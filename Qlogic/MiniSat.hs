@@ -45,8 +45,6 @@ emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.emp
 
 type MiniSatLiteral = Int
 
-setCmd :: String -> MiniSatSolver ()
-setCmd command = State.modify (\ st -> st {cmd = command})
 
 type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 
@@ -71,3 +69,6 @@ instance Solver MiniSatSolver MiniSatLiteral where
                                return True
     getModelValue l       = do st <- State.get
                                return $ Set.member l $ assign st
+
+setCmd :: String -> MiniSat ()
+setCmd command = liftS $ State.modify (\ st -> st {cmd = command})
