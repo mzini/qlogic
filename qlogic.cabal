@@ -34,4 +34,4 @@ library
                     Qlogic.PropositionalFormula
  other-modules:     Qlogic.Utils
  build-depends:     containers, mtl, base>=4.0.0.0, process, pretty, syb, parfold
- ghc-options:       -threaded -O2 -fvia-C
+ ghc-options:       -threaded -O2 -fvia-C -Wall -fno-warn-orphans

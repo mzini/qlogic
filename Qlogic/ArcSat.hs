@@ -59,9 +59,11 @@ arcToFormula :: Eq l => ArcInt -> ArcFormula l
 arcToFormula MinusInf = (Top, [Bot])
 arcToFormula (Fin x)  = (Bot, N.natToFormula x)
 
+bits :: Size -> Int
 bits (Bits n)  = n
 bits (Bound n) = arcToBits n
 
+bound :: Size -> ArcInt
 bound (Bits n) = bitsToArc n
 bound (Bound n) = n
 
@@ -119,8 +121,8 @@ p@(a, xs) `mGeq` q@(b, ys) | lengthdiff > 0 = padBots lengthdiff p `mGeq` q
                                                  where lengthdiff = length ys - length xs
 
 mEqu :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (PropFormula l)
-p@(a, xs) `mEqu` q@(b, ys) = do subresult <- xs `N.mEqu` ys
-                                return $ (a <-> b) && subresult
+(a, xs) `mEqu` (b, ys) = do subresult <- xs `N.mEqu` ys
+                            return $ (a <-> b) && subresult
 
 soundInf :: (Eq l, PropAtom a) => Size -> a -> PropFormula l
 soundInf n v = soundInf' (bits n) v
@@ -139,7 +141,7 @@ arcAtomM n v = do N.enforce [soundInf n v]
                   return $ arcAtom n v
 
 arcAtom' :: (Eq l, PropAtom a) => Int -> Int -> a -> [PropFormula l]
-arcAtom' i n v | i <= n    = propAtom (BZVec v n) : arcAtom' (i Prelude.+ 1) n v
+arcAtom' i n v | i <= n    = propAtom (BZVec v i) : arcAtom' (i Prelude.+ 1) n v
                | otherwise = []
 
 baseFromVec :: (Ord a, Show a, Typeable a) => ArcBZVec a -> a

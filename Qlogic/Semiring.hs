@@ -61,4 +61,4 @@ class AbstrEq a b => AbstrOrd a b where
 
 -- class (Ord a, Semiring a) => OrdSemiring a
 
-class (AbstrOrd a b, Semiring a) => AbstrOrdSemiring a b
+class (AbstrOrd a b, Semiring a) => AbstrOrdSemiring a b where
