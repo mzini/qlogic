@@ -24,7 +24,7 @@ import qualified Control.Monad.State.Lazy as State
 import Control.Concurrent.Utils (spawn)
 import Control.Exception (evaluate, finally, AsyncException(..))
 import Control.Monad (liftM)
-import System.IO (hClose, hGetContents, hFlush, hPutStr)
+import System.IO (hClose, hGetContents, hFlush, hPutStrLn, hPutStr, stderr)
 import qualified Data.IntSet as Set
 import qualified Data.List as List
 import Qlogic.SatSolver
@@ -49,7 +49,9 @@ type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 
 instance Solver MiniSatSolver MiniSatLiteral where
     solve                 = do st <- State.get
-                               out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ addedFormula st
+                               let hd = "p cnf " ++ show (clauseCount st) ++ " " ++ show (lastLit st) ++ "\n"
+                               liftIO $ hPutStr stderr hd
+                               out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ hd ++ addedFormula st
                                case (lines . snd) `liftM` out of
                                  Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
                                      where poslits = filter ((<) 0) $ [(read :: String -> Int) l | l <- words satassign]
