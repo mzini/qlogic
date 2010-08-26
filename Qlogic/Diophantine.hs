@@ -97,7 +97,7 @@ class (Solver s l, SizeSemiring b) => MSemiring s l f a b | f -> a, f -> b, f ->
   equ :: f -> f -> N.NatMonad s l (PropFormula l)
   constToFormula :: b -> f
   formAtom :: b -> a -> N.NatMonad s l f
-  truncFormTo :: Int -> f -> f
+  truncFormTo :: Int -> f -> N.NatMonad s l f
   bigPlus :: [f] -> N.NatMonad s l f
   bigPlus = foldM plus zero
   bigProd :: [f] -> N.NatMonad s l f
@@ -242,51 +242,53 @@ maybeComputePower fm m =
                       return mres)
 
 toFormGen :: (Eq l, DioVarClass a, MSemiring s l f a b)
-          => (b -> DioPoly a b -> DioMonad s l a b f f)
+          => (Maybe b -> b -> DioPoly a b -> DioMonad s l a b f f)
+          -> Maybe b
           -> b
           -> DioFormula l a b
           -> DioMonad s l a b f (PropFormula l)
-toFormGen f n fm@(A (p `Grt` q)) = do pres <- f n p
-                                      qres <- f n q
-                                      natComputation $ pres `grt` qres
-toFormGen f n fm@(A (p `Geq` q)) = do pres <- f n p
-                                      qres <- f n q
-                                      natComputation $ pres `geq` qres
-toFormGen f n fm@(A (p `Equ` q)) = do pres <- f n p
-                                      qres <- f n q
-                                      natComputation $ pres `equ` qres
-toFormGen f n fm@(And ps)        = do press <- mapM (toFormGen f n) ps
-                                      return $ bigAnd press
-toFormGen f n fm@(Or ps)         = do press <- mapM (toFormGen f n) ps
-                                      return $ bigOr press
-toFormGen f n fm@(p `Imp` q)     = do pres <- toFormGen f n p
-                                      qres <- toFormGen f n q
-                                      return $ pres --> qres
-toFormGen f n fm@(p `Iff` q)     = do pres <- toFormGen f n p
-                                      qres <- toFormGen f n q
-                                      return $ pres <-> qres
-toFormGen f n fm@(Ite p q r)     = do pres <- toFormGen f n p
-                                      qres <- toFormGen f n q
-                                      rres <- toFormGen f n r
-                                      return $ ite pres qres rres
-toFormGen f n fm@(Neg p)         = do pres <- toFormGen f n p
-                                      return $ not pres
-toFormGen _ _ Top                = return Top
-toFormGen _ _ Bot                = return Bot
+toFormGen f ob n fm@(A (p `Grt` q)) = do pres <- f ob n p
+                                         qres <- f ob n q
+                                         natComputation $ pres `grt` qres
+toFormGen f ob n fm@(A (p `Geq` q)) = do pres <- f ob n p
+                                         qres <- f ob n q
+                                         natComputation $ pres `geq` qres
+toFormGen f ob n fm@(A (p `Equ` q)) = do pres <- f ob n p
+                                         qres <- f ob n q
+                                         natComputation $ pres `equ` qres
+toFormGen f ob n fm@(And ps)        = do press <- mapM (toFormGen f ob n) ps
+                                         return $ bigAnd press
+toFormGen f ob n fm@(Or ps)         = do press <- mapM (toFormGen f ob n) ps
+                                         return $ bigOr press
+toFormGen f ob n fm@(p `Imp` q)     = do pres <- toFormGen f ob n p
+                                         qres <- toFormGen f ob n q
+                                         return $ pres --> qres
+toFormGen f ob n fm@(p `Iff` q)     = do pres <- toFormGen f ob n p
+                                         qres <- toFormGen f ob n q
+                                         return $ pres <-> qres
+toFormGen f ob n fm@(Ite p q r)     = do pres <- toFormGen f ob n p
+                                         qres <- toFormGen f ob n q
+                                         rres <- toFormGen f ob n r
+                                         return $ ite pres qres rres
+toFormGen f ob n fm@(Neg p)         = do pres <- toFormGen f ob n p
+                                         return $ not pres
+toFormGen _ _ _ Top                = return Top
+toFormGen _ _ _ Bot                = return Bot
 
 toFormulaGen :: (Ord l, DioVarClass a, MSemiring s l f a b)
-             => (b -> DioFormula l a b -> DioMonad s l a b f (PropFormula l))
+             => (Maybe b -> b -> DioFormula l a b -> DioMonad s l a b f (PropFormula l))
+             -> Maybe b
              -> b
              -> DioFormula l a b
              -> SatSolver s l (PropFormula l)
-toFormulaGen f n phi =
-    do (r,st) <- runDioMonad (f n phi)
+toFormulaGen f ob n phi =
+    do (r,st) <- runDioMonad (f ob n phi)
        return $ r && bigAnd (formulas st)
 
 -- Optimisation c of Section 5 in the Fuhs-et-al paper
 -- prunes all "numbers" to their maximum length based on
 -- the assumption that the value of all variables is at most n
-toFormula :: (Ord l, Ord b, DioVarClass a, MSemiring s l f a b) => b -> DioFormula l a b -> SatSolver s l (PropFormula l)
+toFormula :: (Ord l, Ord b, DioVarClass a, MSemiring s l f a b) => Maybe b -> b -> DioFormula l a b -> SatSolver s l (PropFormula l)
 -- ^ translates a Diophantine constraint into a propositional formula,
 --   where variables are instantiated by values between 0 and n.
 --   this function tracks the maximum value of all subformulas.
@@ -294,7 +296,7 @@ toFormula :: (Ord l, Ord b, DioVarClass a, MSemiring s l f a b) => b -> DioFormu
 --   maximum values
 toFormula = toFormulaGen toFormula'
 
-toFormula' :: (Eq l, Ord l, Ord b, DioVarClass a, MSemiring s l f a b) => b -> DioFormula l a b -> DioMonad s l a b f (PropFormula l)
+toFormula' :: (Eq l, Ord l, Ord b, DioVarClass a, MSemiring s l f a b) => Maybe b -> b -> DioFormula l a b -> DioMonad s l a b f (PropFormula l)
 toFormula' = toFormGen polyToNat
 
 natComputation :: MSemiring s l f a b => N.NatMonad s l g -> DioMonad s l a b f g
@@ -303,45 +305,47 @@ natComputation m =
        State.modify $ \s -> s{formulas = fms ++ formulas s}
        return r
 
-natComputation_ :: MSemiring s l f a b => N.NatMonad s l f -> b -> DioMonad s l a b f f
-natComputation_ m b =
+natComputation_ :: MSemiring s l f a b => N.NatMonad s l f -> Maybe b -> b -> DioMonad s l a b f f
+natComputation_ m ob b =
     do r <- natComputation m
-       return $ truncFormTo (sizeToBits b) r
+       case ob of
+         Nothing -> natComputation $ truncFormTo (sizeToBits b) r
+         Just b' -> natComputation $ truncFormTo (min (sizeToBits b') (sizeToBits b)) r
 
-polyToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => b -> DioPoly a b -> DioMonad s l a b f f
-polyToNat n []        = return zero
-polyToNat n [x]       = monoToNat n x
-polyToNat n fm@(x:xs) = maybeComputePoly fm $
-                        do pres <- monoToNat n x
-                           qres <- polyToNat n xs
-                           natComputation_ (plus pres qres) newmax
+polyToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> DioPoly a b -> DioMonad s l a b f f
+polyToNat ob n []        = return zero
+polyToNat ob n [x]       = monoToNat ob n x
+polyToNat ob n fm@(x:xs) = maybeComputePoly fm $
+                           do pres <- monoToNat ob n x
+                              qres <- polyToNat ob n xs
+                              natComputation_ (plus pres qres) ob newmax
     where newmax = polyBound n fm
 
-monoToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => b -> DioMono a b -> DioMonad s l a b f f
-monoToNat n (DioMono m [])          = return $ constToFormula m
-monoToNat n fm@(DioMono m (vp:vps)) = maybeComputeMono fm $
-                                      do pres <- powerToNat n vp
-                                         qres <- monoToNat n (DioMono m vps)
-                                         natComputation_ (prod pres qres) newmax
+monoToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> DioMono a b -> DioMonad s l a b f f
+monoToNat ob n (DioMono m [])          = return $ constToFormula m
+monoToNat ob n fm@(DioMono m (vp:vps)) = maybeComputeMono fm $
+                                         do pres <- powerToNat ob n vp
+                                            qres <- monoToNat ob n (DioMono m vps)
+                                            natComputation_ (prod pres qres) ob newmax
     where newmax = monoBound n fm
 
-powerToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => b -> VPower a -> DioMonad s l a b f f
-powerToNat n fm@(VPower v m) | m > 1  = maybeComputePower fm $
+powerToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> VPower a -> DioMonad s l a b f f
+powerToNat ob n fm@(VPower v m) | m > 1  = maybeComputePower fm $
+                                           do State.modify (\s -> s{vars = Set.insert v $ vars s})
+                                              pres <- powerToNat ob n (VPower v 1)
+                                              qres <- powerToNat ob n (VPower v (pred m))
+                                              natComputation_ (prod pres qres) ob newmax
+                    where newmax = powerBound n fm
+powerToNat ob n fm@(VPower v m) | m == 1 = maybeComputePower fm $ natComputation_ (formAtom n v) ob n
+powerToNat ob n (VPower v m) | otherwise = return one
+powerToNat ob n fm@(RestrictVar v m) | m > 1  = maybeComputePower fm $
                                         do State.modify (\s -> s{vars = Set.insert v $ vars s})
-                                           pres <- powerToNat n (VPower v 1)
-                                           qres <- powerToNat n (VPower v (pred m))
-                                           natComputation_ (prod pres qres) newmax
-                    where newmax         = powerBound n fm
-powerToNat n fm@(VPower v m) | m == 1 = maybeComputePower fm $ natComputation_ (formAtom n v) n
-powerToNat n (VPower v m) | otherwise = return one
-powerToNat n fm@(RestrictVar v m) | m > 1  = maybeComputePower fm $
-                                        do State.modify (\s -> s{vars = Set.insert v $ vars s})
-                                           pres <- powerToNat n (RestrictVar v 1)
-                                           qres <- powerToNat n (RestrictVar v (pred m))
-                                           natComputation_ (prod pres qres) newmax
-                    where newmax         = powerBound n fm
-powerToNat n fm@(RestrictVar v m) | m == 1 = maybeComputePower fm $ natComputation_ (formAtom SR.one v) n
-powerToNat n (RestrictVar v m) | otherwise = return one
+                                           pres <- powerToNat ob n (RestrictVar v 1)
+                                           qres <- powerToNat ob n (RestrictVar v (pred m))
+                                           natComputation_ (prod pres qres) ob newmax
+                    where newmax = powerBound n fm
+powerToNat ob n fm@(RestrictVar v m) | m == 1    = maybeComputePower fm $ natComputation_ (formAtom SR.one v) ob n
+                                     | otherwise = return one
 
 polyBound :: SR.Semiring b => b -> DioPoly a b -> b
 polyBound n = SR.bigPlus . map (monoBound n)

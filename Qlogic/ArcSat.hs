@@ -88,6 +88,10 @@ padBots n (b, xs) = (b, N.padBots n xs)
 truncTo :: Int -> ArcFormula l -> ArcFormula l
 truncTo n (b, xs) = (b, N.truncTo n xs)
 
+mTruncTo :: (Ord l, Sat.Solver s l) => Int -> ArcFormula l -> N.NatMonad s l (ArcFormula l)
+mTruncTo n (b, xs) = do xs' <- N.mTruncTo n xs
+                        return (b, xs')
+
 mAdd :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (ArcFormula l)
 mAdd p@(a, xs) q@(b, ys) | lengthdiff > 0 = mAdd (padBots lengthdiff p) q
                          | lengthdiff < 0 = mAdd q p

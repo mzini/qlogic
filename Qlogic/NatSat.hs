@@ -61,9 +61,7 @@ import qualified Qlogic.Semiring as SR
 import qualified Qlogic.Assign as A
 import qualified Data.List as List
 import qualified Data.Map as Map
-import qualified Data.Set as Set
 import Data.Typeable
-import Qlogic.Utils
 
 type NatFormula l = [PropFormula l]
 
@@ -92,9 +90,11 @@ natToBits n | n <= 1    = 1
 bitsToNat :: Int -> Int
 bitsToNat n = max 0 $ (2 ^ n) - 1
 
+bits :: Size -> Int
 bits (Bits n)  = n
 bits (Bound n) = natToBits n
 
+bound :: Size -> Int
 bound (Bits n) = bitsToNat n
 bound (Bound n) = n
 
@@ -177,6 +177,12 @@ truncTo _ []                         = []
 truncTo n qs@(_:ps) | length qs <= n = qs
                     | otherwise      = truncTo n ps
 
+mTruncTo :: (Ord l, Solver s l) => Int -> NatFormula l -> NatMonad s l (NatFormula l)
+mTruncTo _ []                         = return []
+mTruncTo n qs@(p:ps) | length qs <= n = return qs
+                     | otherwise      = do enforce [not p]
+                                           mTruncTo n ps
+
 padBots :: Int -> NatFormula l -> NatFormula l
 padBots n | n == 0    = id
           | n > 0     = (Bot :) . padBots (n - 1)
@@ -248,13 +254,13 @@ natAtom :: (PropAtom a, Eq l) => Size -> a -> NatFormula l
 -- ^ creates a "natural number variable" encoded by a list of
 --   propositional variables. The length of the list is chosen
 --   to be exactly enough in order to represent n
-natAtom size a = nBitVar (bits size) a
+natAtom sz a = nBitVar (bits sz) a
 
 natAtomM :: (PropAtom a, Eq l, Solver s l) => Size -> a -> NatMonad s l (NatFormula l)
-natAtomM size a = do let v = nBitVar (bits size) a
-                     varRestrict <- natToFormula (bound size) `mGeq` v
-                     enforce [varRestrict]
-                     return v
+natAtomM sz a = do let v = nBitVar (bits sz) a
+                   varRestrict <- natToFormula (bound sz) `mGeq` v
+                   enforce [varRestrict]
+                   return v
 
 nBitVar :: (PropAtom a, Eq l) => Int -> a -> NatFormula l
 nBitVar n v = nBitVar' 1 n v
