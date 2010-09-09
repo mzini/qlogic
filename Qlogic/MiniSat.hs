@@ -37,10 +37,11 @@ data St = St { lastLit :: MiniSatLiteral
              , clauseCount :: Int
              , addedFormula :: String
              , assign :: Set.IntSet
-             , cmd    :: String}
+             , cmd    :: String
+             , debug  :: Bool}
 
 emptySt :: St
-emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat2"}
+emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat2", debug=False }
 
 type MiniSatLiteral = Int
 
@@ -72,3 +73,9 @@ instance Solver MiniSatSolver MiniSatLiteral where
 
 setCmd :: String -> MiniSat ()
 setCmd command = liftS $ State.modify (\ st -> st {cmd = command})
+
+setDebug :: MiniSat ()
+setDebug = liftS $ State.modify (\ st -> st {debug = True})
+
+unsetDebug :: MiniSat ()
+unsetDebug = liftS $ State.modify (\ st -> st {debug = False})
