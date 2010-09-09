@@ -51,7 +51,7 @@ type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 instance Solver MiniSatSolver MiniSatLiteral where
     solve                 = do st <- State.get
                                let hd = "p cnf " ++ show (clauseCount st) ++ " " ++ show (lastLit st) ++ "\n"
-                               liftIO $ hPutStr stderr hd
+                               if debug st then liftIO $ hPutStr stderr hd else return ()
                                out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ hd ++ addedFormula st
                                case (lines . snd) `liftM` out of
                                  Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
