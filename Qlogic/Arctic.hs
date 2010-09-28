@@ -30,6 +30,10 @@ instance Semiring ArcInt where
   zero = MinusInf
   one  = Fin 0
 
+arcToInt :: ArcInt -> Int
+arcToInt MinusInf = 0
+arcToInt (Fin n) = n
+
 max :: ArcInt -> ArcInt -> ArcInt
 max MinusInf x = x
 max x MinusInf = x

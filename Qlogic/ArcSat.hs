@@ -67,6 +67,9 @@ bound :: Size -> ArcInt
 bound (Bits n) = bitsToArc n
 bound (Bound n) = n
 
+intbound :: Size -> Int
+intbound = arcToInt . bound
+
 increment :: Size -> Size
 increment (Bits n)         = Bits $ n Prelude.+ 1
 increment (Bound MinusInf) = Bound $ Fin 1
