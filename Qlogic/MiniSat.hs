@@ -57,7 +57,7 @@ instance Solver MiniSatSolver MiniSatLiteral where
                                if debug st then do endtime <- liftIO getCurrentTime
                                                    let satlength = diffUTCTime endtime starttime
                                                    liftIO $ hPutStr stderr ("Time to SAT solve: " ++ show satlength ++ "\n")
-                               else return ()
+                                  else return ()
                                return False
 --                               case (lines . snd) `liftM` out of
 --                                 Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
