@@ -24,6 +24,7 @@ import qualified Control.Monad.State.Lazy as State
 import Control.Concurrent.Utils (spawn)
 import Control.Exception (evaluate, finally, AsyncException(..))
 import Control.Monad (liftM)
+import Data.Time.Clock (getCurrentTime, diffUTCTime)
 import System.IO (hClose, hGetContents, hFlush, hPutStrLn, hPutStr, stderr)
 import qualified Data.IntSet as Set
 import qualified Data.List as List
@@ -41,25 +42,30 @@ data St = St { lastLit :: MiniSatLiteral
              , debug  :: Bool}
 
 emptySt :: St
-emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat2", debug=False }
+emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat2", debug=True }
 
 type MiniSatLiteral = Int
-
 
 type MiniSat r = SatSolver MiniSatSolver MiniSatLiteral r
 
 instance Solver MiniSatSolver MiniSatLiteral where
     solve                 = do st <- State.get
+                               starttime <- liftIO getCurrentTime
                                let hd = "p cnf " ++ show (clauseCount st) ++ " " ++ show (lastLit st) ++ "\n"
                                if debug st then liftIO $ hPutStr stderr hd else return ()
-                               out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ hd ++ addedFormula st
-                               case (lines . snd) `liftM` out of
-                                 Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
-                                     where poslits = filter ((<) 0) $ [(read :: String -> Int) l | l <- words satassign]
-                                           add l   = State.modify (\ st -> st{assign = Set.insert l $ assign st})
-                                 Just _                          -> return False
-                                 Nothing                         -> return False
-                               where snd (_, x, _) = x
+--                               out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ hd ++ addedFormula st
+                               if debug st then do endtime <- liftIO getCurrentTime
+                                                   let satlength = diffUTCTime endtime starttime
+                                                   liftIO $ hPutStr stderr ("Time to SAT solve: " ++ show satlength ++ "\n")
+                               else return ()
+                               return False
+--                               case (lines . snd) `liftM` out of
+--                                 Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
+--                                     where poslits = filter ((<) 0) $ [(read :: String -> Int) l | l <- words satassign]
+--                                           add l   = State.modify (\ st -> st{assign = Set.insert l $ assign st})
+--                                 Just _                          -> return False
+--                                 Nothing                         -> return False
+--                               where snd (_, x, _) = x
     run m                 = State.evalStateT m emptySt
     newLit                = do st <- State.get
                                State.put st{lastLit = lastLit st + 1}
