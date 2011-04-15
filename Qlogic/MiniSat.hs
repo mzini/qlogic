@@ -53,19 +53,19 @@ instance Solver MiniSatSolver MiniSatLiteral where
                                starttime <- liftIO getCurrentTime
                                let hd = "p cnf " ++ show (clauseCount st) ++ " " ++ show (lastLit st) ++ "\n"
                                if debug st then liftIO $ hPutStr stderr hd else return ()
---                               out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ hd ++ addedFormula st
+                               out <- liftIO $ spawn (cmd st) ["/dev/stdin","/dev/stdout"] $ hd ++ addedFormula st
                                if debug st then do endtime <- liftIO getCurrentTime
                                                    let satlength = diffUTCTime endtime starttime
                                                    liftIO $ hPutStr stderr ("Time to SAT solve: " ++ show satlength ++ "\n")
                                   else return ()
-                               return False
---                               case (lines . snd) `liftM` out of
---                                 Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
---                                     where poslits = filter ((<) 0) $ [(read :: String -> Int) l | l <- words satassign]
---                                           add l   = State.modify (\ st -> st{assign = Set.insert l $ assign st})
---                                 Just _                          -> return False
---                                 Nothing                         -> return False
---                               where snd (_, x, _) = x
+--                               return False
+                               case (lines . snd) `liftM` out of
+                                 Just ("SAT" : satassign : _) -> mapM_ add poslits >> return True
+                                     where poslits = filter ((<) 0) $ [(read :: String -> Int) l | l <- words satassign]
+                                           add l   = State.modify (\ st -> st{assign = Set.insert l $ assign st})
+                                 Just _                          -> return False
+                                 Nothing                         -> return False
+                               where snd (_, x, _) = x
     run m                 = State.evalStateT m emptySt
     newLit                = do st <- State.get
                                State.put st{lastLit = lastLit st + 1}
