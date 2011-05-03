@@ -56,7 +56,7 @@ import qualified Qlogic.Arctic as A
 import qualified Qlogic.ArcSat as AS
 import qualified Qlogic.NatSat as N
 import Qlogic.SatSolver hiding (add)
-import Qlogic.Boolean
+import Qlogic.Boolean hiding (fm)
 import Qlogic.Formula hiding (simplify)
 import Qlogic.PropositionalFormula
 import qualified Qlogic.Semiring as SR
@@ -83,6 +83,7 @@ type DioPoly a b = [DioMono a b]
 data DioAtom a b = Grt (DioPoly a b) (DioPoly a b)
                  | Geq (DioPoly a b) (DioPoly a b)
                  | Equ (DioPoly a b) (DioPoly a b)
+                 | PAtom a
                  deriving (Eq, Ord, Show, Typeable)
 
 class (Solver s l, SizeSemiring b) => MSemiring s l f a b | f -> a, f -> b, f -> s, f -> l, b -> f where
@@ -247,31 +248,32 @@ toFormGen :: (Eq l, DioVarClass a, MSemiring s l f a b)
           -> b
           -> DioFormula l a b
           -> DioMonad s l a b f (PropFormula l)
-toFormGen f cb n fm@(A (p `Grt` q)) = do pres <- f cb n p
-                                         qres <- f cb n q
-                                         natComputation $ pres `grt` qres
-toFormGen f cb n fm@(A (p `Geq` q)) = do pres <- f cb n p
-                                         qres <- f cb n q
-                                         natComputation $ pres `geq` qres
-toFormGen f cb n fm@(A (p `Equ` q)) = do pres <- f cb n p
-                                         qres <- f cb n q
-                                         natComputation $ pres `equ` qres
-toFormGen f cb n fm@(And ps)        = do press <- mapM (toFormGen f cb n) ps
-                                         return $ bigAnd press
-toFormGen f cb n fm@(Or ps)         = do press <- mapM (toFormGen f cb n) ps
-                                         return $ bigOr press
-toFormGen f cb n fm@(p `Imp` q)     = do pres <- toFormGen f cb n p
-                                         qres <- toFormGen f cb n q
-                                         return $ pres --> qres
-toFormGen f cb n fm@(p `Iff` q)     = do pres <- toFormGen f cb n p
-                                         qres <- toFormGen f cb n q
-                                         return $ pres <-> qres
-toFormGen f cb n fm@(Ite p q r)     = do pres <- toFormGen f cb n p
-                                         qres <- toFormGen f cb n q
-                                         rres <- toFormGen f cb n r
-                                         return $ ite pres qres rres
-toFormGen f cb n fm@(Neg p)         = do pres <- toFormGen f cb n p
-                                         return $ not pres
+toFormGen f cb n (A (p `Grt` q)) = do pres <- f cb n p
+                                      qres <- f cb n q
+                                      natComputation $ pres `grt` qres
+toFormGen f cb n (A (p `Geq` q)) = do pres <- f cb n p
+                                      qres <- f cb n q
+                                      natComputation $ pres `geq` qres
+toFormGen f cb n (A (p `Equ` q)) = do pres <- f cb n p
+                                      qres <- f cb n q
+                                      natComputation $ pres `equ` qres
+toFormGen f cb n (A (PAtom p))   = return $ propAtom p 
+toFormGen f cb n (And ps)        = do press <- mapM (toFormGen f cb n) ps
+                                      return $ bigAnd press
+toFormGen f cb n (Or ps)         = do press <- mapM (toFormGen f cb n) ps
+                                      return $ bigOr press
+toFormGen f cb n (p `Imp` q)     = do pres <- toFormGen f cb n p
+                                      qres <- toFormGen f cb n q
+                                      return $ pres --> qres
+toFormGen f cb n (p `Iff` q)     = do pres <- toFormGen f cb n p
+                                      qres <- toFormGen f cb n q
+                                      return $ pres <-> qres
+toFormGen f cb n (Ite p q r)     = do pres <- toFormGen f cb n p
+                                      qres <- toFormGen f cb n q
+                                      rres <- toFormGen f cb n r
+                                      return $ ite pres qres rres
+toFormGen f cb n (Neg p)         = do pres <- toFormGen f cb n p
+                                      return $ not pres
 toFormGen _ _ _ Top                = return Top
 toFormGen _ _ _ Bot                = return Bot
 
