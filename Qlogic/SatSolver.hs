@@ -49,6 +49,7 @@ import Control.Monad
 import Control.Monad.Trans (lift, liftIO, MonadIO)
 import qualified Control.Monad.State.Lazy as State
 import qualified Data.Map as Map
+import qualified Data.Maybe as Maybe
 import qualified Qlogic.Assign as Assign
 import Qlogic.Assign (Assign, (|->))
 import Data.Typeable
@@ -150,14 +151,96 @@ addLitClause (Clause ls) = case foldr f (Just []) ls of
           f TopLit  xs        = Nothing
           f _       Nothing   = Nothing
 
+fmToClauses :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l (Maybe [Clause (ExtLit l)])
+fmToClauses (And as)    = do cs <- mapM fmToClauses as
+                             if all Maybe.isJust cs then return $ Just $ concat $ Maybe.catMaybes cs else return Nothing
+fmToClauses (Or [])     = return $ Just [Clause []]
+fmToClauses (Or [a])    = fmToClauses a
+fmToClauses fm@(Or _)   = do ac <- fmToClause fm
+                             case ac of
+                               Nothing  -> return Nothing
+                               Just ac' -> return $ Just [ac']
+fmToClauses (a `Iff` b) = if isLiteral a && isLiteral b then fmToClauses (And [Or [Neg a, b], Or [a, Neg b]]) else return Nothing
+fmToClauses (Ite g t e) = if isLiteral g then fmToClauses (And [Or [Neg g, t], Or [g, e]]) else return Nothing
+fmToClauses (a `Imp` b) = do ac <- fmToClause (Or [Neg a, b])
+                             case ac of
+                               Nothing  -> return Nothing
+                               Just ac' -> return $ Just [ac']
+fmToClauses (Neg a)     = negFmToClauses a
+fmToClauses fm@(A _)    = do al <- plit fm
+                             return $ Just [Clause [al]]
+fmToClauses fm@(SL _)   = do al <- plit fm
+                             return $ Just [Clause [al]]
+fmToClauses Top         = return $ Just []
+fmToClauses Bot         = return $ Just [Clause []]
+
+fmToClause :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l (Maybe (Clause (ExtLit l)))
+fmToClause (And [])    = return $ Just (Clause [TopLit])
+fmToClause (And [a])   = fmToClause a
+fmToClause (And _)     = return Nothing
+fmToClause (Or as)     = do cs <- mapM fmToClause as
+                            if all Maybe.isJust cs then return $ Just $ Clause $ concatMap clauseToList $ Maybe.catMaybes cs else return Nothing
+fmToClause (_ `Iff` _) = return Nothing
+fmToClause (Ite _ _ _) = return Nothing
+fmToClause (a `Imp` b) = fmToClause (Or [Neg a, b])
+fmToClause (Neg a)     = negFmToClause a
+fmToClause fm@(A _)    = do al <- plit fm
+                            return $ Just $ Clause [al]
+fmToClause fm@(SL _)   = do al <- plit fm
+                            return $ Just $ Clause [al]
+fmToClause Top         = return $ Just $ Clause [TopLit]
+fmToClause Bot         = return $ Just $ Clause []
+
+negFmToClauses :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l (Maybe [Clause (ExtLit l)])
+negFmToClauses (And [])    = return $ Just [Clause []]
+negFmToClauses (And [a])   = negFmToClauses a
+negFmToClauses fm@(And _)  = do ac <- negFmToClause fm
+                                case ac of
+                                  Nothing  -> return Nothing
+                                  Just ac' -> return $ Just [ac']
+negFmToClauses (Or as)     = do cs <- mapM negFmToClauses as
+                                if all Maybe.isJust cs then return $ Just $ concat $ Maybe.catMaybes cs else return Nothing
+negFmToClauses (a `Iff` b) = if isLiteral a && isLiteral b then fmToClauses (And [Or [Neg a, Neg b], Or [a, b]]) else return Nothing
+negFmToClauses (Ite g t e) = if isLiteral g then negFmToClauses (Or [And [g, t], And [Neg g, e]]) else return Nothing
+negFmToClauses (a `Imp` b) = fmToClauses (And [a, Neg b])
+negFmToClauses (Neg a)     = fmToClauses a
+negFmToClauses fm@(A _)    = do al <- plit $ Neg fm
+                                return $ Just $ [Clause [al]]
+negFmToClauses fm@(SL _)   = do al <- plit $ Neg fm
+                                return $ Just $ [Clause [al]]
+negFmToClauses Top         = return $ Just $ [Clause []]
+negFmToClauses Bot         = return $ Just $ []
+
+negFmToClause :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l (Maybe (Clause (ExtLit l)))
+negFmToClause (And as)    = do cs <- mapM negFmToClause as
+                               if all Maybe.isJust cs then return $ Just $ Clause $ concatMap clauseToList $ Maybe.catMaybes cs else return Nothing
+negFmToClause (Or [])     = return $ Just (Clause [TopLit])
+negFmToClause (Or [a])    = negFmToClause a
+negFmToClause (Or _)      = return Nothing
+negFmToClause (_ `Iff` _) = return Nothing
+negFmToClause (Ite _ _ _) = return Nothing
+negFmToClause (_ `Imp` _) = return Nothing
+negFmToClause (Neg a)     = fmToClause a
+negFmToClause fm@(A _)    = do al <- plit $ Neg fm
+                               return $ Just $ Clause [al]
+negFmToClause fm@(SL _)   = do al <- plit $ Neg fm
+                               return $ Just $ Clause [al]
+negFmToClause Top         = return $ Just $ Clause []
+negFmToClause Bot         = return $ Just $ Clause [TopLit]
+
 addPositively :: (Eq l, Solver s l) => PropFormula l -> SatSolver s l (ExtLit l)
 addPositively fm@(Neg a) = addNegatively a >>= negateELit
 addPositively fm@(A _)   = plit fm
 addPositively fm@(SL l)  = plit fm
 addPositively Top        = return TopLit
 addPositively Bot        = return BotLit
-addPositively fm         = do (p,n) <- freshELits 
-                              addPositively' (p,n) fm
+addPositively fm         = do clss <- fmToClauses fm
+                              case clss of
+                                Nothing -> do (p,n) <- freshELits 
+                                              addPositively' (p,n) fm
+                                Just cs -> do (p,n) <- freshELits
+                                              mapM_ (\(Clause c) -> addLitClause $ Clause $ n:c) cs
+                                              return p
 
 addPositively' :: (Eq l, Solver s l) => (ExtLit l,ExtLit l) -> PropFormula l -> SatSolver s l (ExtLit l)
 addPositively' (p,n) fm@(And as) =
@@ -207,8 +290,13 @@ addNegatively fm@(A _)   = plit fm
 addNegatively fm@(SL l)  = plit fm
 addNegatively Top        = return TopLit
 addNegatively Bot        = return BotLit
-addNegatively fm         = do (p,n) <- freshELits
-                              addNegatively' (p,n) fm
+addNegatively fm         = do clss <- negFmToClauses fm
+                              case clss of
+                                Nothing -> do (p,n) <- freshELits
+                                              addNegatively' (p,n) fm
+                                Just cs -> do (p,n) <- freshELits
+                                              mapM_ (\(Clause c) -> addLitClause $ Clause $ p:c) cs
+                                              return p
 
 addNegatively' :: (Eq l, Solver s l) => (ExtLit l, ExtLit l) -> PropFormula l -> SatSolver s l (ExtLit l)
 addNegatively' (p,n) fm@(And as) =

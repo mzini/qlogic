@@ -212,9 +212,10 @@ mTimes ps [q]    = do return $ map (&& q) ps
 mTimes [p] qs    = mTimes qs [p]
 mTimes ps (q:qs) = do let r1 = map (&& q) ps ++ padBots (length qs) []
                       r2 <- mTimes ps qs
-                      addres <- mAdd r1 r2
-                      vs <- mapM (maybeFreshVar . return) addres
-                      return vs
+                      mAdd r1 r2
+--                      addres <- mAdd r1 r2
+--                      vs <- mapM (maybeFreshVar . return) addres
+--                      return vs
 
 mGrt :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (PropFormula l)
 [] `mGrt` []                  = return Bot

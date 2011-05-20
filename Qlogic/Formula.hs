@@ -24,6 +24,7 @@ module Qlogic.Formula
    Formula(..)
   -- * operations
   , literal
+  , isLiteral
   , size
   , simplify
   , atoms
@@ -112,6 +113,22 @@ instance (Eq a, Eq l) => NGBoolean (Formula l a) a where
 
 literal :: l -> Formula l a
 literal = SL
+
+isLiteral :: Formula l a -> Bool
+isLiteral (A _)       = True
+isLiteral (SL _)      = True
+isLiteral (And [])    = True
+isLiteral (And [a])   = isLiteral a
+isLiteral (And _)     = False
+isLiteral (Or [])     = True
+isLiteral (Or [a])    = isLiteral a
+isLiteral (Or _)      = False
+isLiteral (_ `Iff` _) = False
+isLiteral (Ite _ _ _) = False
+isLiteral (_ `Imp` _) = False
+isLiteral (Neg a)     = isLiteral a
+isLiteral Top         = True
+isLiteral Bot         = True
 
 atoms :: (Ord a, Ord l) => Formula l a -> Set (Either l a)
 atoms (A a)       = Set.singleton (Right a)
