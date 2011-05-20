@@ -25,6 +25,10 @@ module Qlogic.Formula
   -- * operations
   , literal
   , isLiteral
+  , isClause
+  , isNegClause
+  , isCnf
+  , isNegCnf
   , size
   , simplify
   , atoms
@@ -33,7 +37,7 @@ module Qlogic.Formula
   ) 
 where
 import Prelude hiding ((&&),(||),not,foldl,foldr)
-import Data.Foldable
+import Data.Foldable hiding (all)
 import Data.Set (Set)
 import Data.Typeable
 import Qlogic.Boolean
@@ -129,6 +133,62 @@ isLiteral (_ `Imp` _) = False
 isLiteral (Neg a)     = isLiteral a
 isLiteral Top         = True
 isLiteral Bot         = True
+
+isClause :: Formula l a -> Bool
+isClause (A _)       = True
+isClause (SL _)      = True
+isClause (And [])    = True
+isClause (And [a])   = isClause a
+isClause (And _)     = False
+isClause (Or as)     = all isClause as
+isClause (a `Iff` b) = False
+isClause (Ite _ _ _) = False
+isClause (a `Imp` b) = isNegClause a && isClause b
+isClause (Neg a)     = isNegClause a
+isClause Top         = True
+isClause Bot         = True
+
+isNegClause :: Formula l a -> Bool
+isNegClause (A _)       = True
+isNegClause (SL _)      = True
+isNegClause (And as)    = all isNegClause as
+isNegClause (Or [])     = True
+isNegClause (Or [a])    = isNegClause a
+isNegClause (Or as)     = False
+isNegClause (a `Iff` b) = False
+isNegClause (Ite _ _ _) = False
+isNegClause (a `Imp` b) = False
+isNegClause (Neg a)     = isClause a
+isNegClause Top         = True
+isNegClause Bot         = True
+
+isCnf :: Formula l a -> Bool
+isCnf (A _)       = True
+isCnf (SL _)      = True
+isCnf (And as)    = all isCnf as
+isCnf (Or [])     = True
+isCnf (Or [a])    = isCnf a
+isCnf fm@(Or _)   = isClause fm
+isCnf (a `Iff` b) = isLiteral a && isLiteral b
+isCnf (Ite g t e) = isLiteral g && isClause t && isClause e
+isCnf (a `Imp` b) = isNegClause a && isClause b
+isCnf (Neg a)     = isNegCnf a
+isCnf Top         = True
+isCnf Bot         = True
+
+isNegCnf :: Formula l a -> Bool
+isNegCnf (A _)       = True
+isNegCnf (SL _)      = True
+isNegCnf (And [])    = True
+isNegCnf (And [a])   = isNegCnf a
+isNegCnf fm@(And _)  = isNegClause fm
+isNegCnf (Or as)     = all isNegCnf as
+isNegCnf (a `Iff` b) = isLiteral a && isLiteral b
+isNegCnf (Ite g t e) = isLiteral g && isNegClause t && isNegClause e
+isNegCnf (a `Imp` b) = isCnf a && isNegCnf b
+isNegCnf (Neg a)     = isCnf a
+isNegCnf Top         = True
+isNegCnf Bot         = True
 
 atoms :: (Ord a, Ord l) => Formula l a -> Set (Either l a)
 atoms (A a)       = Set.singleton (Right a)

@@ -160,8 +160,8 @@ fmToClauses fm@(Or _)   = do ac <- fmToClause fm
                              case ac of
                                Nothing  -> return Nothing
                                Just ac' -> return $ Just [ac']
-fmToClauses (a `Iff` b) = if isLiteral a && isLiteral b then fmToClauses (And [Or [Neg a, b], Or [a, Neg b]]) else return Nothing
-fmToClauses (Ite g t e) = if isLiteral g then fmToClauses (And [Or [Neg g, t], Or [g, e]]) else return Nothing
+fmToClauses (a `Iff` b) = fmToClauses (And [Or [Neg a, b], Or [a, Neg b]])
+fmToClauses (Ite g t e) = fmToClauses (And [Or [Neg g, t], Or [g, e]])
 fmToClauses (a `Imp` b) = do ac <- fmToClause (Or [Neg a, b])
                              case ac of
                                Nothing  -> return Nothing
@@ -200,8 +200,8 @@ negFmToClauses fm@(And _)  = do ac <- negFmToClause fm
                                   Just ac' -> return $ Just [ac']
 negFmToClauses (Or as)     = do cs <- mapM negFmToClauses as
                                 if all Maybe.isJust cs then return $ Just $ concat $ Maybe.catMaybes cs else return Nothing
-negFmToClauses (a `Iff` b) = if isLiteral a && isLiteral b then fmToClauses (And [Or [Neg a, Neg b], Or [a, b]]) else return Nothing
-negFmToClauses (Ite g t e) = if isLiteral g then negFmToClauses (Or [And [g, t], And [Neg g, e]]) else return Nothing
+negFmToClauses (a `Iff` b) = fmToClauses (And [Or [Neg a, Neg b], Or [a, b]])
+negFmToClauses (Ite g t e) = negFmToClauses (Or [And [g, t], And [Neg g, e]])
 negFmToClauses (a `Imp` b) = fmToClauses (And [a, Neg b])
 negFmToClauses (Neg a)     = fmToClauses a
 negFmToClauses fm@(A _)    = do al <- plit $ Neg fm
@@ -234,13 +234,13 @@ addPositively fm@(A _)   = plit fm
 addPositively fm@(SL l)  = plit fm
 addPositively Top        = return TopLit
 addPositively Bot        = return BotLit
-addPositively fm         = do clss <- fmToClauses fm
-                              case clss of
-                                Nothing -> do (p,n) <- freshELits 
-                                              addPositively' (p,n) fm
-                                Just cs -> do (p,n) <- freshELits
-                                              mapM_ (\(Clause c) -> addLitClause $ Clause $ n:c) cs
-                                              return p
+addPositively fm         = case isCnf fm of
+                             True  -> do (p,n) <- freshELits
+                                         cs <- liftM Maybe.fromJust $ fmToClauses fm
+                                         mapM_ (\(Clause c) -> addLitClause $ Clause $ n:c) cs
+                                         return p
+                             False -> do (p,n) <- freshELits
+                                         addPositively' (p,n) fm
 
 addPositively' :: (Eq l, Solver s l) => (ExtLit l,ExtLit l) -> PropFormula l -> SatSolver s l (ExtLit l)
 addPositively' (p,n) fm@(And as) =
@@ -290,13 +290,13 @@ addNegatively fm@(A _)   = plit fm
 addNegatively fm@(SL l)  = plit fm
 addNegatively Top        = return TopLit
 addNegatively Bot        = return BotLit
-addNegatively fm         = do clss <- negFmToClauses fm
-                              case clss of
-                                Nothing -> do (p,n) <- freshELits
-                                              addNegatively' (p,n) fm
-                                Just cs -> do (p,n) <- freshELits
-                                              mapM_ (\(Clause c) -> addLitClause $ Clause $ p:c) cs
-                                              return p
+addNegatively fm         = case isNegCnf fm of
+                             True  -> do (p,_) <- freshELits
+                                         cs <- liftM Maybe.fromJust $ negFmToClauses fm
+                                         mapM_ (\(Clause c) -> addLitClause $ Clause $ p:c) cs
+                                         return p
+                             False -> do (p,n) <- freshELits
+                                         addNegatively' (p,n) fm
 
 addNegatively' :: (Eq l, Solver s l) => (ExtLit l, ExtLit l) -> PropFormula l -> SatSolver s l (ExtLit l)
 addNegatively' (p,n) fm@(And as) =
