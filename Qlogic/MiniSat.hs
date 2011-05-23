@@ -42,7 +42,7 @@ data St = St { lastLit :: MiniSatLiteral
              , debug  :: Bool}
 
 emptySt :: St
-emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat2", debug=False }
+emptySt = St { lastLit = 0, clauseCount = 0, addedFormula = "", assign = Set.empty, cmd = "minisat2", debug=True }
 
 type MiniSatLiteral = Int
 

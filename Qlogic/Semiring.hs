@@ -58,6 +58,12 @@ class AbstrEq a b => AbstrOrd a b where
   x .>. y = y .<. x
   (.<=.) :: a -> a -> b
   x .<=. y = x .>=. y
+-- .<<=. is a binary relation such that (x .<=. y && x .<<=. y) <-> x .<. y
+  (.<<=.) :: a -> a -> b
+  x .<<=. y = x .<. y
+-- .>>=. is the inverse of .<<=.
+  (.>>=.) :: a -> a -> b
+  x .>>=. y = x .>. y
 
 -- class (Ord a, Semiring a) => OrdSemiring a
 
