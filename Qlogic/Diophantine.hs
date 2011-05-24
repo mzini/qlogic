@@ -211,12 +211,13 @@ maybeComputePoly :: (PropAtom a, Ord b, MSemiring s l f a b)
                  -> DioMonad s l a b f f
                  -> DioMonad s l a b f f
 maybeComputePoly fm m =
-  do s <- getPolys
-     (case Map.lookup fm s of
-        Just x  -> return x
-        Nothing -> do mres <- m
-                      setPolys (Map.insert fm mres s)
-                      return mres)
+ do s <- getPolys
+    (case Map.lookup fm s of
+       Just x  -> return x
+       Nothing -> do mres <- m
+                     setPolys (Map.insert fm mres s)
+                     return mres)
+--   m
 
 maybeComputeMono :: (PropAtom a, Ord b, MSemiring s l f a b)
                  => DioMono a b
@@ -229,6 +230,7 @@ maybeComputeMono fm m =
         Nothing -> do mres <- m
                       setMonos (Map.insert fm mres s)
                       return mres)
+--   m
 
 maybeComputePower :: (PropAtom a, Ord b, MSemiring s l f a b)
                   => VPower a
@@ -241,6 +243,7 @@ maybeComputePower fm m =
         Nothing -> do mres <- m
                       setPowers (Map.insert fm mres s)
                       return mres)
+--   m
 
 toFormGen :: (Eq l, DioVarClass a, MSemiring s l f a b)
           => (Maybe b -> b -> DioPoly a b -> DioMonad s l a b f f)
@@ -336,8 +339,8 @@ powerToNat cb n fm = maybeComputePower fm $
                      do State.modify (\s -> s{vars = Set.insert v $ vars s})
                         x <- maybeComputePower xfm $ natComputation_ (formAtom vbound v) cb n
                         if m <= 0
-                        then return one
-                        else powerToNat' cb n fm fm' (N.natToBits m - 1) x
+                         then return one
+                         else powerToNat' cb n fm fm' (N.natToBits m - 1) x
   where (v,m,vbound,xfm) = case fm of
                              VPower      v' m' -> (v',m',n     , VPower      v' 1)
                              RestrictVar v' m' -> (v',m',SR.one, RestrictVar v' 1)
@@ -348,17 +351,17 @@ powerToNat cb n fm = maybeComputePower fm $
 powerToNat' :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> VPower a -> VPower a -> Int -> f -> DioMonad s l a b f f
 powerToNat' cb n origfm fm i y | i > 0     = do yres <- natComputation_ (prod y y) cb newmax
                                                 if m >= 2 ^ (i - 1)
-                                                then do x <- maybeComputePower xfm $ natComputation_ (formAtom vbound v) cb n
-                                                        yres' <- natComputation_ (prod x yres) cb newmax
-                                                        powerToNat' cb n origfm fm' (i - 1) yres'
-                                                else powerToNat' cb n origfm fm' (i - 1) yres
+                                                 then do x <- maybeComputePower xfm $ natComputation_ (formAtom vbound v) cb n
+                                                         yres' <- natComputation_ (prod x yres) cb newmax
+                                                         powerToNat' cb n origfm fm' (i - 1) yres'
+                                                 else powerToNat' cb n origfm fm' (i - 1) yres
                                | otherwise = return y
   where (v,m,vbound,xfm) = case fm of
                              VPower      v' m' -> (v',m',n     ,VPower      v' 1)
                              RestrictVar v' m' -> (v',m',SR.one,RestrictVar v' 1)
         mm = if m >= 2 ^ (i - 1)
-             then m - (2 ^ (i - 1))
-             else m
+              then m - (2 ^ (i - 1))
+              else m
         fm' = case fm of
                 VPower      v' _ -> VPower      v' mm
                 RestrictVar v' _ -> RestrictVar v' mm
