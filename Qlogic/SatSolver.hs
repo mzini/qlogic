@@ -166,6 +166,7 @@ fmToClauses (a `Imp` b) = do ac <- fmToClause (Or [Neg a, b])
                              case ac of
                                Nothing  -> return Nothing
                                Just ac' -> return $ Just [ac']
+fmToClauses (Maj a b c) = fmToClauses (And [Or [a, b], Or [a, c], Or [b, c]])
 fmToClauses (Neg a)     = negFmToClauses a
 fmToClauses fm@(A _)    = do al <- plit fm
                              return $ Just [Clause [al]]
@@ -183,6 +184,7 @@ fmToClause (Or as)     = do cs <- mapM fmToClause as
 fmToClause (_ `Iff` _) = return Nothing
 fmToClause (Ite _ _ _) = return Nothing
 fmToClause (a `Imp` b) = fmToClause (Or [Neg a, b])
+fmToClause (Maj _ _ _) = return Nothing
 fmToClause (Neg a)     = negFmToClause a
 fmToClause fm@(A _)    = do al <- plit fm
                             return $ Just $ Clause [al]
@@ -203,6 +205,7 @@ negFmToClauses (Or as)     = do cs <- mapM negFmToClauses as
 negFmToClauses (a `Iff` b) = fmToClauses (And [Or [Neg a, Neg b], Or [a, b]])
 negFmToClauses (Ite g t e) = negFmToClauses (Or [And [g, t], And [Neg g, e]])
 negFmToClauses (a `Imp` b) = fmToClauses (And [a, Neg b])
+negFmToClauses (Maj a b c) = fmToClauses (And [Or [Neg a, Neg b], Or [Neg a, Neg c], Or [Neg b, Neg c]])
 negFmToClauses (Neg a)     = fmToClauses a
 negFmToClauses fm@(A _)    = do al <- plit $ Neg fm
                                 return $ Just $ [Clause [al]]
@@ -220,6 +223,7 @@ negFmToClause (Or _)      = return Nothing
 negFmToClause (_ `Iff` _) = return Nothing
 negFmToClause (Ite _ _ _) = return Nothing
 negFmToClause (_ `Imp` _) = return Nothing
+negFmToClause (Maj _ _ _) = return Nothing
 negFmToClause (Neg a)     = fmToClause a
 negFmToClause fm@(A _)    = do al <- plit $ Neg fm
                                return $ Just $ Clause [al]
@@ -272,6 +276,13 @@ addPositively' (p,n) fm@(a `Imp` b) =
      bpos <- addPositively b
      addLitClause $ Clause [n, aneg, bpos]
      return p
+addPositively' (p,n) fm@(Maj a b c) = do apos <- addPositively a
+                                         bpos <- addPositively b
+                                         cpos <- addPositively c
+                                         addLitClause $ Clause [n, apos, bpos]
+                                         addLitClause $ Clause [n, apos, cpos]
+                                         addLitClause $ Clause [n, bpos, cpos]
+                                         return p
 addPositively' (p,n) fm@(Neg a) = do addNegatively' (n,p) a
                                      return p
 addPositively' (p,n) fm@(A _)   = do l <- plit fm
@@ -329,6 +340,13 @@ addNegatively' (p,n) fm@(a `Imp` b) =
      addLitClause $ Clause [p, apos]
      addLitClause $ Clause [p, bneg]
      return p
+addNegatively' (p,_) fm@(Maj a b c) = do aneg <- addNegatively a >>= negateELit
+                                         bneg <- addNegatively b >>= negateELit
+                                         cneg <- addNegatively c >>= negateELit
+                                         addLitClause $ Clause [p, aneg, bneg]
+                                         addLitClause $ Clause [p, aneg, cneg]
+                                         addLitClause $ Clause [p, bneg, cneg]
+                                         return p
 addNegatively' (p,n) fm@(Neg a)  = do addPositively' (n,p) a
                                       return p
 addNegatively' (p,n) fm@(A _)    = do l' <- plit fm >>= negateELit
@@ -411,6 +429,10 @@ assertFormula fm = do r <- eval fm
           eval Bot          = return False
           eval (Ite a b c)  = do g <- eval a 
                                  if g then eval b else eval c
+          eval (Maj a b c)  = do r <- eval a
+                                 s <- eval b
+                                 t <- eval c
+                                 return $ (r && s) || (r && t) || (s && t)
 
 
 solveAndCheck :: (Ord l, Solver s l) => SatSolver s l ()

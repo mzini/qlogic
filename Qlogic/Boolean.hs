@@ -46,6 +46,9 @@ class Boolean a where
   ite :: a -> a -> a -> a
   ite g t e = (g --> t) && (not g --> e)
 
+  maj :: a -> a -> a -> a
+  maj a b c = (a || b) && (a || c) && (b || c)
+
   forall :: (Foldable t) => t e -> (e -> a) -> a
   forall xs f = foldr (\ x fm -> f x && fm) top xs 
            
@@ -102,4 +105,4 @@ oneOrThree p q r = p <-> q <-> r
 
 twoOrThree :: Boolean a => a -> a -> a -> a
 -- ^ demands that exacly two or all three formulas hold.
-twoOrThree p q r = (p || q) && (p || r) && (q || r)
+twoOrThree p q r = maj p q r
