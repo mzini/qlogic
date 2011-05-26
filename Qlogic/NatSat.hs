@@ -161,6 +161,8 @@ instance (Solver s l, Boolean r) => Boolean (NatMonad s l r) where
   (<->) = liftM2 (<->)
   (-->) = liftM2 (-->)
   ite = liftM3 ite
+  maj = liftM3 maj
+  odd3 = liftM3 odd3
 
 truncBots :: NatFormula l -> NatFormula l
 -- ^ removes leading Bottoms from a list of propositional formulas
@@ -249,7 +251,7 @@ mGrt :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (Prop
 ps `mGrt` qs | lengthdiff > 0 = padBots lengthdiff ps `mGrt` qs
              | lengthdiff < 0 = ps `mGrt` padBots (abs lengthdiff) qs
              | otherwise      = do subresult <- tail ps `mGrt` tail qs
-                                   return $ maj p (not q) subresult
+                                   return $ twoOrThree p (not q) subresult
    where lengthdiff        = length qs - length ps
          p                 = head ps
          q                 = head qs
@@ -260,7 +262,7 @@ mGeq :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (Prop
 ps `mGeq` qs | lengthdiff > 0 = padBots lengthdiff ps `mGeq` qs
              | lengthdiff < 0 = ps `mGeq` padBots (abs lengthdiff) qs
              | otherwise      = do subresult <- tail ps `mGeq` tail qs
-                                   return $ maj p (not q) subresult
+                                   return $ twoOrThree p (not q) subresult
    where lengthdiff = length qs - length ps
          p          = head ps
          q          = head qs
