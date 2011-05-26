@@ -275,6 +275,14 @@ toFormGen f cb n (Ite p q r)     = do pres <- toFormGen f cb n p
                                       qres <- toFormGen f cb n q
                                       rres <- toFormGen f cb n r
                                       return $ ite pres qres rres
+toFormGen f cb n (Maj p q r)     = do pres <- toFormGen f cb n p
+                                      qres <- toFormGen f cb n q
+                                      rres <- toFormGen f cb n r
+                                      return $ maj pres qres rres
+toFormGen f cb n (Odd p q r)     = do pres <- toFormGen f cb n p
+                                      qres <- toFormGen f cb n q
+                                      rres <- toFormGen f cb n r
+                                      return $ odd3 pres qres rres
 toFormGen f cb n (Neg p)         = do pres <- toFormGen f cb n p
                                       return $ not pres
 toFormGen _ _ _ Top                = return Top

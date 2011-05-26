@@ -49,6 +49,9 @@ class Boolean a where
   maj :: a -> a -> a -> a
   maj a b c = (a || b) && (a || c) && (b || c)
 
+  odd3 :: a -> a -> a -> a
+  odd3 a b c = a <-> b <-> c
+
   forall :: (Foldable t) => t e -> (e -> a) -> a
   forall xs f = foldr (\ x fm -> f x && fm) top xs 
            
@@ -101,8 +104,8 @@ atmostOne (x:xs) = ite x (exactlyNone xs) (atmostOne xs)
 
 oneOrThree :: Boolean a => a -> a -> a -> a
 -- ^ demands that exacly one or all three formulas hold
-oneOrThree p q r = p <-> q <-> r
+oneOrThree = odd3
 
 twoOrThree :: Boolean a => a -> a -> a -> a
 -- ^ demands that exacly two or all three formulas hold.
-twoOrThree p q r = maj p q r
+twoOrThree = maj

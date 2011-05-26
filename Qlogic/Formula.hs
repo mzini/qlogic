@@ -55,6 +55,7 @@ data Formula l a = A a
                  | Ite (Formula l a) (Formula l a) (Formula l a)
                  | Imp (Formula l a) (Formula l a)
                  | Maj (Formula l a) (Formula l a) (Formula l a)
+                 | Odd (Formula l a) (Formula l a) (Formula l a)
                  | Neg (Formula l a)
                  | Top
                  | Bot deriving (Eq, Ord, Typeable, Show)
@@ -123,6 +124,17 @@ instance (Eq a, Eq l) => Boolean (Formula l a) where
     maj a   b   c   | b == c    = b
     maj a   b   c   | otherwise = Maj a b c
 
+    odd3 Top b   c   = b <-> c
+    odd3 Bot b   c   = not $ b <-> c
+    odd3 a   Top c   = a <-> c
+    odd3 a   Bot c   = not $ a <-> c
+    odd3 a   b   Top = a <-> b
+    odd3 a   b   Bot = not $ a <-> b
+    odd3 a   b   c   | a == b    = a <-> c
+    odd3 a   b   c   | a == c    = a <-> b
+    odd3 a   b   c   | b == c    = a <-> b
+    odd3 a   b   c   | otherwise = Odd a b c
+
 
 instance (Eq a, Eq l) => NGBoolean (Formula l a) a where
     atom = A
@@ -143,6 +155,7 @@ isLiteral (_ `Iff` _) = False
 isLiteral (Ite _ _ _) = False
 isLiteral (_ `Imp` _) = False
 isLiteral (Maj _ _ _) = False
+isLiteral (Odd _ _ _) = False
 isLiteral (Neg a)     = isLiteral a
 isLiteral Top         = True
 isLiteral Bot         = True
@@ -158,6 +171,7 @@ isClause (a `Iff` b) = False
 isClause (Ite _ _ _) = False
 isClause (a `Imp` b) = isNegClause a && isClause b
 isClause (Maj _ _ _) = False
+isClause (Odd _ _ _) = False
 isClause (Neg a)     = isNegClause a
 isClause Top         = True
 isClause Bot         = True
@@ -173,6 +187,7 @@ isNegClause (a `Iff` b) = False
 isNegClause (Ite _ _ _) = False
 isNegClause (a `Imp` b) = False
 isNegClause (Maj _ _ _) = False
+isNegClause (Odd _ _ _) = False
 isNegClause (Neg a)     = isClause a
 isNegClause Top         = True
 isNegClause Bot         = True
@@ -188,6 +203,7 @@ isCnf (a `Iff` b) = isLiteral a && isLiteral b
 isCnf (Ite g t e) = isLiteral g && isClause t && isClause e
 isCnf (a `Imp` b) = isNegClause a && isClause b
 isCnf (Maj a b c) = isClause a && isClause b && isClause c
+isCnf (Odd a b c) = isLiteral a && isLiteral b && isLiteral c
 isCnf (Neg a)     = isNegCnf a
 isCnf Top         = True
 isCnf Bot         = True
@@ -203,6 +219,7 @@ isNegCnf (a `Iff` b) = isLiteral a && isLiteral b
 isNegCnf (Ite g t e) = isLiteral g && isNegClause t && isNegClause e
 isNegCnf (a `Imp` b) = isCnf a && isNegCnf b
 isNegCnf (Maj a b c) = isNegClause a && isNegClause b && isNegClause c
+isNegCnf (Odd a b c) = isLiteral a && isLiteral b && isLiteral c
 isNegCnf (Neg a)     = isCnf a
 isNegCnf Top         = True
 isNegCnf Bot         = True
@@ -216,6 +233,7 @@ atoms (a `Iff` b) = atoms a `Set.union` atoms b
 atoms (Ite a b c) = Set.unions [atoms a, atoms b, atoms c]
 atoms (a `Imp` b) = atoms a `Set.union`atoms b
 atoms (Maj a b c) = atoms a `Set.union` atoms b `Set.union` atoms c
+atoms (Odd a b c) = atoms a `Set.union` atoms b `Set.union` atoms c
 atoms (Neg a)     = atoms a
 atoms Top         = Set.empty
 atoms Bot         = Set.empty
@@ -228,6 +246,7 @@ simplify (a `Iff` b) = simplify a <-> simplify b
 simplify (Ite g t e) = ite (simplify g) (simplify t) (simplify e)
 simplify (a `Imp` b) = simplify a --> simplify b
 simplify (Maj a b c) = maj (simplify a) (simplify b) (simplify c)
+simplify (Odd a b c) = odd3 (simplify a) (simplify b) (simplify c)
 simplify (Neg a)     = not $ simplify a
 simplify a           = a
 
@@ -241,6 +260,7 @@ size (Iff a b)   = size a + size b + 1
 size (Ite a b c) = size a + size b + size c + 1
 size (Imp a b)   = size a + size b + 1
 size (Maj a b c) = size a + size b + size c + 1
+size (Odd a b c) = size a + size b + size c + 1
 size (Neg a)     = size a + 1
 size Top         = 1
 size Bot         = 1
@@ -257,6 +277,7 @@ pprintFormula (Iff a b)   = pprintBinFm "<->" a b
 pprintFormula (Imp a b)   = pprintBinFm "-->" a b
 pprintFormula (Ite a b c) = parens $ text "ite" <+> (pprintFormula a $$ pprintFormula b $$ pprintFormula c)
 pprintFormula (Maj a b c) = parens $ text "maj" <+> (pprintFormula a $$ pprintFormula b $$ pprintFormula c)
+pprintFormula (Odd a b c) = parens $ text "odd" <+> (pprintFormula a $$ pprintFormula b $$ pprintFormula c)
 pprintFormula (Neg a)     = parens $ text "-" <+> (pprintFormula a)
 pprintFormula Top         = text "T"
 pprintFormula Bot         = text "F"
