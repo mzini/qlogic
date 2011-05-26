@@ -205,10 +205,18 @@ mAdd ps qs | lengthdiff > 0 = mAdd (padBots lengthdiff ps) qs
         p           = head ps
         q           = head qs
 
+-- addition without overflow
+mAddNO :: (Ord l, Solver s l) => NatFormula l -> NatFormula l -> NatMonad s l (NatFormula l)
+mAddNO ps qs = do addres <- mAdd ps qs
+                  case addres of
+                    []   -> return []
+                    r:rs -> do enforce [not r]
+                               return $ rs
+            
 mTimes :: (Ord l, Solver s l) => NatFormula l -> NatFormula l -> NatMonad s l (NatFormula l)
 mTimes _ []      = return []
 mTimes [] _      = return []
-mTimes ps [q]    = do return $ map (&& q) ps
+mTimes ps [q]    = return $ map (&& q) ps
 mTimes [p] qs    = mTimes qs [p]
 mTimes ps (q:qs) = do let r1 = map (&& q) ps ++ padBots (length qs) []
                       r2 <- mTimes ps qs
@@ -216,6 +224,23 @@ mTimes ps (q:qs) = do let r1 = map (&& q) ps ++ padBots (length qs) []
 --                      addres <- mAdd r1 r2
 --                      vs <- mapM (maybeFreshVar . return) addres
 --                      return vs
+
+-- multiplication without overflow
+mTimesNO :: (Ord l, Solver s l) => NatFormula l -> NatFormula l -> NatMonad s l (NatFormula l)
+mTimesNO _ []                   = return []
+mTimesNO [] _                   = return []
+mTimesNO [p] [q]                = return $ [p && q]
+mTimesNO ps qs | lengthdiff > 0 = mTimesNO (padBots lengthdiff ps) qs
+               | lengthdiff < 0 = mTimesNO qs ps
+               | otherwise      = do as <- return $ map (p0 &&) qs
+                                     bs <- mTimesNO (init ps) (tail qs)
+                                     cs <- mAddNO (init as) bs
+                                     enforce [not p1 || not q]
+                                     return $ cs ++ [last as]
+  where lengthdiff = length qs - length ps
+        p0         = last ps
+        p1         = last $ init ps
+        q          = head qs
 
 mGrt :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (PropFormula l)
 [] `mGrt` []                  = return Bot

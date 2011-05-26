@@ -98,6 +98,7 @@ class (Solver s l, SizeSemiring b) => MSemiring s l f a b | f -> a, f -> b, f ->
   equ :: f -> f -> N.NatMonad s l (PropFormula l)
   constToFormula :: b -> f
   formAtom :: b -> a -> N.NatMonad s l f
+  padFormTo :: Int -> f -> f
   truncFormTo :: Int -> f -> N.NatMonad s l f
   bigPlus :: [f] -> N.NatMonad s l f
   bigPlus = foldM plus zero
@@ -325,13 +326,21 @@ natComputation_ m cb b =
          Nothing -> natComputation $ truncFormTo (sizeToBits b) r
          Just b' -> natComputation $ truncFormTo (min (sizeToBits b') (sizeToBits b)) r
 
+padToLimit :: MSemiring s l f a b => Maybe b -> b -> f -> f
+padToLimit cb b f = padFormTo ub f
+  where ub = case cb of
+               Nothing -> sizeToBits b
+               Just b' -> min (sizeToBits b') (sizeToBits b)
+
 polyToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> DioPoly a b -> DioMonad s l a b f f
 polyToNat cb n []        = return zero
 polyToNat cb n [x]       = monoToNat cb n x
 polyToNat cb n fm@(x:xs) = maybeComputePoly fm $
                            do pres <- monoToNat cb n x
                               qres <- polyToNat cb n xs
-                              natComputation_ (plus pres qres) cb newmax
+                              let pres' = padToLimit cb newmax pres
+                              let qres' = padToLimit cb newmax qres
+                              natComputation_ (plus pres' qres') cb newmax
     where newmax = polyBound n fm
 
 monoToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> DioMono a b -> DioMonad s l a b f f
@@ -339,7 +348,9 @@ monoToNat cb n (DioMono m [])          = return $ constToFormula m
 monoToNat cb n fm@(DioMono m (vp:vps)) = maybeComputeMono fm $
                                          do pres <- powerToNat cb n vp
                                             qres <- monoToNat cb n (DioMono m vps)
-                                            natComputation_ (prod pres qres) cb newmax
+                                            let pres' = padToLimit cb newmax pres
+                                            let qres' = padToLimit cb newmax qres
+                                            natComputation_ (prod pres' qres') cb newmax
     where newmax = monoBound n fm
 
 powerToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> VPower a -> DioMonad s l a b f f
@@ -357,10 +368,12 @@ powerToNat cb n fm = maybeComputePower fm $
                 RestrictVar v' m' -> RestrictVar v' (m' - (2 ^ (N.natToBits m - 1)))
 
 powerToNat' :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> VPower a -> VPower a -> Int -> f -> DioMonad s l a b f f
-powerToNat' cb n origfm fm i y | i > 0     = do yres <- natComputation_ (prod y y) cb newmax
+powerToNat' cb n origfm fm i y | i > 0     = do let y' = padToLimit cb newmax y
+                                                yres <- natComputation_ (prod y' y') cb newmax
                                                 if m >= 2 ^ (i - 1)
                                                  then do x <- maybeComputePower xfm $ natComputation_ (formAtom vbound v) cb n
-                                                         yres' <- natComputation_ (prod x yres) cb newmax
+                                                         let x' = padToLimit cb newmax x
+                                                         yres' <- natComputation_ (prod x' yres) cb newmax
                                                          powerToNat' cb n origfm fm' (i - 1) yres'
                                                  else powerToNat' cb n origfm fm' (i - 1) yres
                                | otherwise = return y
