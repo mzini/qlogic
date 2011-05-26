@@ -232,9 +232,10 @@ mTimesNO [] _                   = return []
 mTimesNO [p] [q]                = return $ [p && q]
 mTimesNO ps qs | lengthdiff > 0 = mTimesNO (padBots lengthdiff ps) qs
                | lengthdiff < 0 = mTimesNO qs ps
-               | otherwise      = do as <- return $ map (p0 &&) qs
+               | otherwise      = do as <- mapM (maybeFreshVar . return) $ map (p0 &&) qs
                                      bs <- mTimesNO (init ps) (tail qs)
-                                     cs <- mAddNO (init as) bs
+                                     bs' <- mapM (maybeFreshVar . return) bs
+                                     cs <- mAddNO (init as) bs'
                                      enforce [not p1 || not q]
                                      return $ cs ++ [last as]
   where lengthdiff = length qs - length ps
