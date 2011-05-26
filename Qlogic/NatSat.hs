@@ -223,7 +223,7 @@ mGrt :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (Prop
 ps `mGrt` qs | lengthdiff > 0 = padBots lengthdiff ps `mGrt` qs
              | lengthdiff < 0 = ps `mGrt` padBots (abs lengthdiff) qs
              | otherwise      = do subresult <- tail ps `mGrt` tail qs
-                                   return $ (p && not q) || ((q --> p) && subresult)
+                                   return $ maj p (not q) subresult
    where lengthdiff        = length qs - length ps
          p                 = head ps
          q                 = head qs
@@ -234,7 +234,7 @@ mGeq :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (Prop
 ps `mGeq` qs | lengthdiff > 0 = padBots lengthdiff ps `mGeq` qs
              | lengthdiff < 0 = ps `mGeq` padBots (abs lengthdiff) qs
              | otherwise      = do subresult <- tail ps `mGeq` tail qs
-                                   return $ (p && not q) || ((q --> p) && subresult)
+                                   return $ maj p (not q) subresult
    where lengthdiff = length qs - length ps
          p          = head ps
          q          = head qs
