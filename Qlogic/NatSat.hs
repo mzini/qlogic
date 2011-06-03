@@ -238,11 +238,11 @@ mTimesNO ps qs | lengthdiff > 0 = mTimesNO (padBots lengthdiff ps) qs
                                      bs <- mTimesNO (init ps) (tail qs)
                                      bs' <- mapM (maybeFreshVar . return) bs
                                      cs <- mAddNO (init as) bs'
-                                     enforce [not p1 || not q]
+                                     enforce $ map (\p' -> not p' || not q) p1s
                                      return $ cs ++ [last as]
   where lengthdiff = length qs - length ps
         p0         = last ps
-        p1         = last $ init ps
+        p1s        = tail $ reverse ps
         q          = head qs
 
 mGrt :: (Solver s l, Eq l) => NatFormula l -> NatFormula l -> NatMonad s l (PropFormula l)
