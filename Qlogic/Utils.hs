@@ -41,7 +41,7 @@ instance ShowLimit a => ShowLimit [a] where
   showlimit n xs         = "[" ++ showlimit (n - 1) (head xs) ++ foldr (\a s -> ", " ++ showlimit (n - 1) a ++ s) "]" (tail xs)
 
 instance ShowLimit Bool where
-  showlimit n _ | n <= 0 = ""
+  showlimit n _ | n <= 0  = ""
   showlimit _ True       = "True"
   showlimit _ False      = "False"
 
