@@ -1,37 +1,51 @@
 Name:               qlogic
-Version:            0.8
-Author:             Martin Avanzini, 
-                    Georg Moser, 
-                    Andreas Schnabl
+Version:            0.9
+Author:             Martin Avanzini <martin.avanzini@uibk.ac.at>,
+                    Georg Moser <georg.moser@uibk.ac.at>,
+                    Andreas Schnabl <andreas.schnabl@uibk.ac.at>
 Category:           Math
 Maintainer:         Martin Avanzini <martin.avanzini@uibk.ac.at>
 Stability:          Experimental
 License:            LGPL
 License-file:       COPYING.LESSER
 Homepage:           http://cl-informatik.uibk.ac.at/software/tct/
-Synopsis:           A Haskell Library for Propositional Logic
+Synopsis:           A Haskell Library for Propositional Logic.
 Description:
   This is a Haskell library for propositional logic.
-  In particular, it provides an interface to the MiniSat SAT solver 
-  based on folkung (http://www.cs.chalmers.se/~koen/folkung/).
+  In particular, it provides an interface to the MiniSat SAT solver,
+  arithmetical operations using bit blasting and many more features.
+  The library is considered deprecated, use satchmo instead
+  (<http://dfa.imn.htwk-leipzig.de/satchmo/>, <http://github.com/pepeiborra/satchmo/>).
 cabal-version:      >= 1.6
 build-type:         Simple
 library
- Exposed-modules:   Qlogic.Arctic
-                    Qlogic.ArcSat
-                    Qlogic.BzSat
-                    Qlogic.Semiring
-                    Qlogic.Formula
-                    Qlogic.Formula.NoLaw
-                    Qlogic.Assign
-                    Qlogic.SatSolver
-                    Qlogic.MiniSat
-                    Qlogic.NatSat
-                    Qlogic.IntSat
-                    Qlogic.Boolean
-                    Qlogic.Diophantine
-                    Qlogic.MemoizedFormula
-                    Qlogic.PropositionalFormula
- other-modules:     Qlogic.Utils
- build-depends:     containers, mtl, base>=4.0.0.0, process, pretty, syb, parfold, time
- ghc-options:       -threaded -O2 -Wall -fno-warn-orphans
+ Exposed-modules:   
+  Qlogic.Arctic
+  Qlogic.ArcSat
+  Qlogic.BzSat
+  Qlogic.Semiring
+  Qlogic.Formula
+  Qlogic.Formula.NoLaw
+  Qlogic.Assign
+  Qlogic.SatSolver
+  Qlogic.MiniSat
+  Qlogic.NatSat
+  Qlogic.IntSat
+  Qlogic.Boolean
+  Qlogic.Diophantine
+  Qlogic.MemoizedFormula
+  Qlogic.PropositionalFormula
+ other-modules:     
+  Qlogic.Utils
+ build-depends:     
+  base == 4.*, 
+  containers >= 0.3 && < 0.5, 
+  parallel == 3.2.*, 
+  mtl ==2.0.*, 
+  pretty == 1.0.1.*, 
+  syb >= 0.1,
+  time >= 1.1 && < 1.3,
+  process ==1.0.1.*,
+  parfold == 0.9
+ ghc-options:       
+   -threaded -O2 -fno-warn-orphans
