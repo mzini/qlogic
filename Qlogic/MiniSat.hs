@@ -17,6 +17,7 @@ along with the Haskell Qlogic Library.  If not, see <http://www.gnu.org/licenses
 
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Qlogic.MiniSat where
 
