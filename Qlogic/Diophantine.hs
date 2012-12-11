@@ -58,7 +58,7 @@ import qualified Qlogic.NatSat as N
 import Qlogic.SatSolver hiding (add)
 import Qlogic.Boolean hiding (fm)
 import Qlogic.Formula hiding (simplify)
-import Qlogic.PropositionalFormula
+import Qlogic.PropositionalFormula hiding (propAtom)
 import qualified Qlogic.Semiring as SR
 import Control.Monad
 import Control.Monad.Trans (lift)
@@ -83,7 +83,7 @@ type DioPoly a b = [DioMono a b]
 data DioAtom a b = Grt (DioPoly a b) (DioPoly a b)
                  | Geq (DioPoly a b) (DioPoly a b)
                  | Equ (DioPoly a b) (DioPoly a b)
-                 | PAtom a
+                 | PAtom PA
                  deriving (Eq, Ord, Show, Typeable)
 
 class (Solver s l, SizeSemiring b) => MSemiring s l f a b | f -> a, f -> b, f -> s, f -> l, b -> f where
@@ -139,6 +139,10 @@ instance PropAtom a => DioVarClass a
 --   showlimit n (VPower a e) = "VPower " ++ showlimit (n - 1) a ++ " " ++ show e
 
 type DioFormula l a b = Formula l (DioAtom a b)
+
+
+propAtom :: (PropAtom a, Eq l, Eq b) => a -> DioFormula l DioVar b
+propAtom a = atom $ PAtom $ PA a
 
 instance Show DioVar where
   show (DioVar a) = "DioVar (" ++ show a ++ ")"
@@ -261,7 +265,7 @@ toFormGen f cb n (A (p `Geq` q)) = do pres <- f cb n p
 toFormGen f cb n (A (p `Equ` q)) = do pres <- f cb n p
                                       qres <- f cb n q
                                       natComputation $ pres `equ` qres
-toFormGen f cb n (A (PAtom p))   = return $ propAtom p 
+toFormGen f cb n (A (PAtom p))   = return $ atom p 
 toFormGen f cb n (And ps)        = do press <- mapM (toFormGen f cb n) ps
                                       return $ bigAnd press
 toFormGen f cb n (Or ps)         = do press <- mapM (toFormGen f cb n) ps
