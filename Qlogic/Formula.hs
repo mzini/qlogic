@@ -136,8 +136,8 @@ instance (Eq a, Eq l) => Boolean (Formula l a) where
     odd3 a   b   c   | otherwise = Odd a b c
 
 
-instance (Eq a, Eq l) => NGBoolean (Formula l a) a where
-    atom = A
+-- instance (Eq a, Eq l) => NGBoolean (Formula l a) a where
+--     atom = A
 
 literal :: l -> Formula l a
 literal = SL

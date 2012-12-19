@@ -1,3 +1,7 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-
 This file is part of the Haskell Qlogic Library.
 
@@ -23,7 +27,7 @@ along with the Haskell Qlogic Library.  If not, see <http://www.gnu.org/licenses
 module Qlogic.PropositionalFormula where
 import Qlogic.Utils
 import qualified Qlogic.Formula as Fm
-import Qlogic.Boolean
+import Qlogic.Boolean as Boolean
 import Data.Typeable
 
 class (Eq a, Ord a, Show a, Typeable a) => PropAtom a
@@ -54,6 +58,9 @@ instance Ord PA where
 instance Show PA where
   show (PA a) = "PA " ++ show  a
 
+instance (Eq l, PropAtom a) => NGBoolean (PropFormula l) a where
+  atom = Fm.A . PA
+  
 propAtom :: (Eq l, PropAtom a) => a -> PropFormula l
-propAtom = atom . PA
+propAtom = atom
 

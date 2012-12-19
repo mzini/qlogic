@@ -101,5 +101,5 @@ instance (Monad s, Eq l) => Boolean (MemoFormula arg s l) where
     ite = liftM3 ite
                                                          
 instance (Monad s, Eq l, PropAtom a) => NGBoolean (MemoFormula arg s l) a where
-    atom = return . propAtom
+    atom = return . atom
     

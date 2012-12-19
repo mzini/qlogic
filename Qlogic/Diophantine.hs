@@ -48,6 +48,7 @@ module Qlogic.Diophantine
   , mult
   , bigMult
   , simplify
+  -- , propAtom
   ) where
 
 import Prelude hiding ((&&),(||),not)
@@ -141,8 +142,12 @@ instance PropAtom a => DioVarClass a
 type DioFormula l a b = Formula l (DioAtom a b)
 
 
-propAtom :: (PropAtom a, Eq l, Eq b) => a -> DioFormula l DioVar b
-propAtom a = atom $ PAtom $ PA a
+instance (Eq l, PropAtom a, Eq b) => NGBoolean (DioFormula l DioVar b) a where
+  atom = A . PAtom . PA
+
+
+-- propAtom :: (PropAtom a, Eq l, Eq b) => a -> DioFormula l DioVar b
+-- propAtom a = atom $ PAtom $ PA a
 
 instance Show DioVar where
   show (DioVar a) = "DioVar (" ++ show a ++ ")"
@@ -265,7 +270,7 @@ toFormGen f cb n (A (p `Geq` q)) = do pres <- f cb n p
 toFormGen f cb n (A (p `Equ` q)) = do pres <- f cb n p
                                       qres <- f cb n q
                                       natComputation $ pres `equ` qres
-toFormGen f cb n (A (PAtom p))   = return $ atom p 
+toFormGen f cb n (A (PAtom (PA p)))   = return $ atom p 
 toFormGen f cb n (And ps)        = do press <- mapM (toFormGen f cb n) ps
                                       return $ bigAnd press
 toFormGen f cb n (Or ps)         = do press <- mapM (toFormGen f cb n) ps
