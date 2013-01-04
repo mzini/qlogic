@@ -39,9 +39,9 @@ library
   Qlogic.Utils
  build-depends:     
   base == 4.*, 
-  containers >= 0.3 && < 0.5, 
+  containers >= 0.4.2 && < 0.5, 
+  mtl >= 2.0 && < 2.2, 
   parallel == 3.2.*, 
-  mtl ==2.0.*, 
   pretty == 1.1.*, 
   syb >= 0.1,
   time >= 1.1 && < 1.5,
