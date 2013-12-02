@@ -39,13 +39,13 @@ library
   Qlogic.Utils
  build-depends:     
   base == 4.*, 
-  containers >= 0.4.2 && < 0.5, 
-  mtl >= 2.0 && < 2.2, 
-  parallel == 3.2.*, 
-  pretty == 1.1.*, 
+  containers >= 0.5, 
+  mtl >= 2.1,
+  parallel >= 3.2, 
+  pretty >= 1.1, 
   syb >= 0.1,
-  time >= 1.1 && < 1.5,
-  process == 1.1.*,
+  time >= 1.1,
+  process >= 1.1,
   parfold == 0.9
  ghc-options:       
    -threaded -O2 -fno-warn-orphans
