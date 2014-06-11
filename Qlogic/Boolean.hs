@@ -16,13 +16,13 @@ along with the Haskell Qlogic Library.  If not, see <http://www.gnu.org/licenses
 -}
 
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Qlogic.Boolean where
 
 import Control.Monad
 import Prelude hiding ((&&),(||),not,foldl,foldr)
-import qualified Prelude as Prelude
+import qualified Prelude
 import Data.Foldable
 
 infixr 3 &&
@@ -53,10 +53,10 @@ class Boolean a where
   odd3 a b c = a <-> b <-> c
 
   forall :: (Foldable t) => t e -> (e -> a) -> a
-  forall xs f = foldr (\ x fm -> f x && fm) top xs 
+  forall xs f = foldr (\ x frm -> f x && frm) top xs 
            
   exist :: (Foldable t) => t e -> (e -> a) -> a
-  exist xs f = foldr (\ x fm -> f x || fm) bot xs 
+  exist xs f = foldr (\ x frm -> f x || frm) bot xs 
 
   bigAnd :: Foldable t => t a -> a
   bigAnd = foldr (&&) top
@@ -64,8 +64,9 @@ class Boolean a where
   bigOr :: Foldable t => t a -> a
   bigOr = foldr (||) bot
 
-class Boolean f => NGBoolean f a | f -> a where
-    atom :: a -> f
+class Boolean f => NGBoolean f where
+    type Atom f
+    atom :: Atom f -> f
 
 instance Boolean Bool where
   (&&) = (Prelude.&&)
@@ -74,8 +75,8 @@ instance Boolean Bool where
   top = True
   bot = False
 
-liftF :: (b -> b -> b) -> (a -> b) -> (a -> b) -> (a -> b)
-liftF o f1 f2 = \a -> f1 a `o` f2 a
+liftF :: (b -> b -> b) -> (a -> b) -> (a -> b) -> a -> b
+liftF o f1 f2 a = f1 a `o` f2 a
 
 instance Boolean b => Boolean (a -> b) where
   (&&)  = liftF (&&)
@@ -98,7 +99,7 @@ exactlyOne (x:xs) = ite x (exactlyNone xs) (exactlyOne xs)
 
 atmostOne :: Boolean a => [a] -> a
 atmostOne [] = top
-atmostOne [x] = top
+atmostOne [_] = top
 atmostOne (x:xs) = ite x (exactlyNone xs) (atmostOne xs)
 
 

@@ -99,7 +99,8 @@ instance (Monad s, Eq l) => Boolean (MemoFormula arg s l) where
     (<->) = liftM2 (<->)
     (-->) = liftM2 (-->)
     ite = liftM3 ite
-                                                         
-instance (Monad s, Eq l, PropAtom a) => NGBoolean (MemoFormula arg s l) a where
+
+instance (Monad s, Eq l) => NGBoolean (MemoFormula arg s l) where
+    type Atom (MemoFormula arg s l) = PA
     atom = return . atom
-    
+

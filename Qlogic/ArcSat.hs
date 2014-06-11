@@ -20,7 +20,7 @@ along with the Haskell Qlogic Library.  If not, see <http://www.gnu.org/licenses
 module Qlogic.ArcSat where
 
 import Prelude hiding ((+), max, not, (&&), (||))
-import qualified Prelude as Prelude
+import qualified Prelude
 import qualified Data.List as List
 import Data.Typeable
 import qualified Qlogic.Assign as A
@@ -107,7 +107,7 @@ mAdd p@(a, xs) q@(b, ys) | lengthdiff > 0 = mAdd (padBots lengthdiff p) q
 mTimes :: (Ord l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (ArcFormula l)
 mTimes p@(a, xs) q@(b, ys) | lengthdiff > 0 = mTimes (padBots lengthdiff p) q
                            | lengthdiff < 0 = mTimes q p
-                           | otherwise      = do c <- N.maybeFreshVar $ return $ (a || b)
+                           | otherwise      = do c <- N.maybeFreshVar $ return (a || b)
                                                  uress' <- N.mAdd xs ys
                                                  uress  <- mapM (N.maybeFreshVar . return . (not c &&)) uress'
                                                  return (c, uress)
@@ -122,7 +122,7 @@ p@(a, xs) `mGrt` q@(b, ys) | lengthdiff > 0 = padBots lengthdiff p `mGrt` q
 
 mGeq :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l (PropFormula l)
 p@(a, xs) `mGeq` q@(b, ys) | lengthdiff > 0 = padBots lengthdiff p `mGeq` q
-                           | lengthdiff < 0 = do p `mGeq` padBots (abs lengthdiff) q
+                           | lengthdiff < 0 = p `mGeq` padBots (abs lengthdiff) q
                            | otherwise      = do subresult <- xs `N.mGeq` ys
                                                  return $ b || (not a && subresult)
                                                  where lengthdiff = length ys - length xs
@@ -132,7 +132,7 @@ mEqu :: (Eq l, Sat.Solver s l) => ArcFormula l -> ArcFormula l -> N.NatMonad s l
                             return $ (a <-> b) && subresult
 
 soundInf :: (Eq l, PropAtom a) => Size -> a -> PropFormula l
-soundInf n v = soundInf' (bits n) v
+soundInf n = soundInf' (bits n)
 
 soundInf' :: (Eq l, PropAtom a) => Int -> a -> PropFormula l
 soundInf' n v = propAtom (InfBit v) --> bigAnd (map (not . propAtom . BZVec v) [1..n])
@@ -156,10 +156,10 @@ baseFromVec (InfBit x)  = x
 baseFromVec (BZVec x _) = x
 
 eval ::  Ord l => ArcFormula l -> A.Assign l -> ArcInt
-eval (f, fs) ass = boolsToInt $ (A.eval f ass, map (flip A.eval ass) fs)
+eval (f, fs) ass = boolsToInt (A.eval f ass, map (`A.eval` ass) fs)
 
 boolsToInt :: (Bool, [Bool]) -> ArcInt
-boolsToInt (True, ps)  = if any id ps then error "Qlogic.ArcSat.boolsToInt: Incorrect Encoding of MinusInf" else MinusInf
+boolsToInt (True, ps)  = if or ps then error "Qlogic.ArcSat.boolsToInt: Incorrect Encoding of MinusInf" else MinusInf
 boolsToInt (False, ps) = Fin $ boolsToInt' ps
 
 boolsToInt' :: [Bool] -> Int

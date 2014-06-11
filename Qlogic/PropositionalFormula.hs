@@ -1,7 +1,3 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-
 This file is part of the Haskell Qlogic Library.
 
@@ -18,11 +14,12 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with the Haskell Qlogic Library.  If not, see <http://www.gnu.org/licenses/>.
 -}
-
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
 
 module Qlogic.PropositionalFormula where
 import Qlogic.Utils
@@ -31,11 +28,6 @@ import Qlogic.Boolean as Boolean
 import Data.Typeable
 
 class (Eq a, Ord a, Show a, Typeable a) => PropAtom a
-  -- where
-  --           toPropositionalAtom :: a -> PropositionalAtom
-  --           toPropositionalAtom = PropositionalAtom
-  --           fromPropositionalAtom :: PropositionalAtom -> Maybe a
-  --           fromPropositionalAtom (PropositionalAtom a) = cast a
 
 data PA = forall a. (PropAtom a) => PA a deriving Typeable
 
@@ -58,9 +50,11 @@ instance Ord PA where
 instance Show PA where
   show (PA a) = "PA " ++ show  a
 
-instance (Eq l, PropAtom a) => NGBoolean (PropFormula l) a where
-  atom = Fm.A . PA
-  
-propAtom :: (Eq l, PropAtom a) => a -> PropFormula l
-propAtom = atom
+instance Eq l => NGBoolean (PropFormula l) where
+  type Atom (PropFormula l) = PA
+  atom = Fm.A
+
+
+propAtom :: (NGBoolean b, Atom b ~ PA, PropAtom a) => a -> b
+propAtom = atom . PA
 

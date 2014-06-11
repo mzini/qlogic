@@ -48,7 +48,6 @@ module Qlogic.Diophantine
   , mult
   , bigMult
   , simplify
-  -- , propAtom
   ) where
 
 import Prelude hiding ((&&),(||),not)
@@ -142,12 +141,9 @@ instance PropAtom a => DioVarClass a
 type DioFormula l a b = Formula l (DioAtom a b)
 
 
-instance (Eq l, PropAtom a, Eq b) => NGBoolean (DioFormula l DioVar b) a where
-  atom = A . PAtom . PA
-
-
--- propAtom :: (PropAtom a, Eq l, Eq b) => a -> DioFormula l DioVar b
--- propAtom a = atom $ PAtom $ PA a
+instance (Eq l, Eq b) => NGBoolean (DioFormula l DioVar b) where
+  type Atom (DioFormula l DioVar b) = PA
+  atom = A . PAtom
 
 instance Show DioVar where
   show (DioVar a) = "DioVar (" ++ show a ++ ")"
@@ -270,7 +266,7 @@ toFormGen f cb n (A (p `Geq` q)) = do pres <- f cb n p
 toFormGen f cb n (A (p `Equ` q)) = do pres <- f cb n p
                                       qres <- f cb n q
                                       natComputation $ pres `equ` qres
-toFormGen f cb n (A (PAtom (PA p)))   = return $ atom p 
+toFormGen f cb n (A (PAtom p))   = return $ atom p 
 toFormGen f cb n (And ps)        = do press <- mapM (toFormGen f cb n) ps
                                       return $ bigAnd press
 toFormGen f cb n (Or ps)         = do press <- mapM (toFormGen f cb n) ps
@@ -336,13 +332,13 @@ natComputation_ m cb b =
          Just b' -> natComputation $ truncFormTo (min (sizeToBits b') (sizeToBits b)) r
 
 padToLimit :: MSemiring s l f a b => Maybe b -> b -> f -> f
-padToLimit cb b f = padFormTo ub f
+padToLimit cb b = padFormTo ub
   where ub = case cb of
                Nothing -> sizeToBits b
                Just b' -> min (sizeToBits b') (sizeToBits b)
 
 polyToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> DioPoly a b -> DioMonad s l a b f f
-polyToNat cb n []        = return zero
+polyToNat _  _ []        = return zero
 polyToNat cb n [x]       = monoToNat cb n x
 polyToNat cb n fm@(x:xs) = maybeComputePoly fm $
                            do pres <- monoToNat cb n x
@@ -353,7 +349,7 @@ polyToNat cb n fm@(x:xs) = maybeComputePoly fm $
     where newmax = polyBound n fm
 
 monoToNat :: (MSemiring s l f a b, DioVarClass a, Ord l, Ord b) => Maybe b -> b -> DioMono a b -> DioMonad s l a b f f
-monoToNat cb n (DioMono m [])          = return $ constToFormula m
+monoToNat _  _ (DioMono m [])          = return $ constToFormula m
 monoToNat cb n fm@(DioMono m (vp:vps)) = maybeComputeMono fm $
                                          do pres <- powerToNat cb n vp
                                             qres <- monoToNat cb n (DioMono m vps)
@@ -457,45 +453,28 @@ simplify = shallowSimp . map simpMono
 
 shallowSimp :: (Eq a, Eq b, SR.Semiring b) => DioPoly a b -> DioPoly a b
 shallowSimp [] = []
-shallowSimp ((DioMono n xs):ms) | n == SR.zero = shallowSimp ms
-shallowSimp ((DioMono n xs):ms) | otherwise    = (DioMono (foldl addcoeff n xss) xs):(shallowSimp yss)
-                                  where (xss, yss)               = List.partition (\(DioMono _ xs') -> xs == xs') ms
-                                        addcoeff x (DioMono y _) = x `SR.plus` y
+shallowSimp (DioMono n xs : ms)
+  | n == SR.zero = shallowSimp ms
+  | otherwise    = DioMono (foldl addcoeff n xss) xs : shallowSimp yss
+  where (xss, yss)               = List.partition (\(DioMono _ xs') -> xs == xs') ms
+        addcoeff x (DioMono y _) = x `SR.plus` y
 
 simpMono :: Eq a => DioMono a b -> DioMono a b
 simpMono (DioMono n xs) = DioMono n (simpPower xs)
 
 simpPower :: Eq a => [VPower a] -> [VPower a]
 simpPower [] = []
-simpPower ((VPower v n):xs) | n == 0    = simpPower xs
-simpPower ((VPower v n):xs) | otherwise = (VPower v (foldl addpow n xss)):(simpPower yss)
-                                          where (xss, yss)              = List.partition isRightPow xs
-                                                isRightPow (VPower w _) = v == w
-                                                isRightPow _            = False
-                                                addpow x (VPower _ y)   = x `SR.plus` y
-simpPower ((RestrictVar v n):xs) | n == 0    = simpPower xs
-simpPower ((RestrictVar v n):xs) | otherwise = (RestrictVar v (foldl addpow n xss)):(simpPower yss)
-                                          where (xss, yss)                   = List.partition isRightPow xs
-                                                isRightPow (RestrictVar w _) = v == w
-                                                isRightPow _                 = False
-                                                addpow x (RestrictVar _ y)   = x `SR.plus` y
-
-
--- toFormulaSimp :: DioVarClass a => Size -> DioFormula l a -> PropFormula
--- -- ^ translates a Diophantine constraint into a propositional formula,
--- --   where variables are instantiated by values between 0 and n.
--- toFormulaSimp = toFormulaGen toFormulaSimp'
---
--- toFormulaSimp' :: DioVarClass a => Size -> DioFormula l a -> DioMonad s a PropFormula
--- toFormulaSimp' = toFormGen polyToNatSimp
---
--- polyToNatSimp :: DioVarClass a => Size -> DioPoly a -> DioMonad s l a NatFormula
--- polyToNatSimp n = pairEmpty . truncBots . bigPlus . map (monoToNatSimp n)
---                   where pairEmpty x = (x, Set.empty)
---
--- monoToNatSimp :: DioVarClass a => Size -> DioMono a -> NatFormula
--- monoToNatSimp n (DioMono m vp) = truncBots $ natToFormula m .*. (bigTimes . map (powerToNatSimp n)) vp
---
--- powerToNatSimp :: DioVarClass a => Size -> VPower a -> NatFormula
--- powerToNatSimp n (VPower v m) | m > 0     = natAtom n v .*. powerToNatSimp n (VPower v (m - 1))
---                               | otherwise = [Top]
+simpPower (VPower v n : xs)
+  | n == 0    = simpPower xs
+  | otherwise = VPower v (foldl addpow n xss) : simpPower yss
+  where (xss, yss) = List.partition isRightPow xs
+        isRightPow (VPower w _) = v == w
+        isRightPow _            = False
+        addpow x (VPower _ y)   = x `SR.plus` y
+simpPower (RestrictVar v n : xs)
+  | n == 0    = simpPower xs
+  | otherwise = RestrictVar v (foldl addpow n xss): simpPower yss
+  where (xss, yss)                   = List.partition isRightPow xs
+        isRightPow (RestrictVar w _) = v == w
+        isRightPow _                 = False
+        addpow x (RestrictVar _ y)   = x `SR.plus` y

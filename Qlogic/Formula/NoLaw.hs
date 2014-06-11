@@ -15,8 +15,6 @@ You should have received a copy of the GNU Lesser General Public License
 along with the Haskell Qlogic Library.  If not, see <http://www.gnu.org/licenses/>.
 -}
 
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 module Qlogic.Formula.NoLaw
   (-- * Types
    Formula(..)
@@ -61,5 +59,6 @@ instance (Eq a, Eq l) => Boolean (Formula l a) where
     ite = lift3 F.Ite
 
 
-instance (Eq a, Eq l) => NGBoolean (Formula l a) a where
+instance (Eq l, Eq a) => NGBoolean (Formula l a) where
+    type Atom (Formula l a) = a
     atom = Form . F.A
